@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Desk</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #0f766e; --accent-ink: #ffffff; --soft: #f0fdfa;
+    --amber: #b45309; --amber-bg: #fef3c7; --green: #047857; --green-bg: #d1fae5;
+    --red: #b91c1c; --red-bg: #fee2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f17; --card: #111827; --ink: #f3f4f6; --muted: #9ca3af; --line: #263041;
+      --accent: #2dd4bf; --accent-ink: #042f2e; --soft: #0f2a28;
+      --amber: #fbbf24; --amber-bg: #3a2a06; --green: #34d399; --green-bg: #06281d;
+      --red: #f87171; --red-bg: #3b0d0d;
+    }
+  }
+  * { box-sizing: border-box }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif }
+  button, input, select { font: inherit; color: inherit }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px }
+  header { border-bottom: 1px solid var(--line); background: var(--card) }
+  header .wrap { display: flex; align-items: center; gap: 16px; height: 56px }
+  .brand { font-weight: 700 } .grow { flex: 1 }
+  .muted { color: var(--muted) } .small { font-size: 13px }
+  nav { display: flex; gap: 4px; overflow-x: auto; padding: 12px 0 }
+  nav button { background: none; border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+               color: var(--muted); font-weight: 600; white-space: nowrap }
+  nav button.on { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 9px; padding: 8px 14px;
+         cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+  .btn:disabled { opacity: .5; cursor: default }
+  .grid2 { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr } }
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+  .product { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+             padding: 12px; cursor: pointer }
+  .product:hover { border-color: var(--accent) } .product:disabled { opacity: .45; cursor: default }
+  .product b { display: block; font-size: 14px } .price { font-variant-numeric: tabular-nums }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums }
+  th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 8px 6px;
+       border-bottom: 1px solid var(--line) }
+  td { padding: 9px 6px; border-bottom: 1px solid var(--line) }
+  .num { text-align: right } tr.click { cursor: pointer } tr.click:hover td { background: var(--soft) }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600 }
+  .pending { color: var(--amber); background: var(--amber-bg) }
+  .paid { color: var(--green); background: var(--green-bg) }
+  .cancelled { color: var(--red); background: var(--red-bg) }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+  .between { justify-content: space-between }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px }
+  .kpi .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums }
+  .qty { display: inline-flex; align-items: center; gap: 6px }
+  .qty button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
+                background: var(--card); cursor: pointer }
+  input, select { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 10px }
+  .login { max-width: 380px; margin: 10vh auto; }
+  .login input { width: 100%; margin-bottom: 10px }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink);
+           color: var(--bg); padding: 10px 16px; border-radius: 10px; display: none; max-width: 90vw }
+  .stack > * + * { margin-top: 14px }
+  .scroll { overflow-x: auto }
+  h2 { font-size: 17px; margin: 0 }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api/v1";
+const state = { token: null, me: null, tab: "sale", products: [], customers: [], cart: {}, order: null };
+const $ = (sel) => document.querySelector(sel);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (v) => `${Number(v).toLocaleString("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`;
+const when = (iso) => iso ? new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z").toLocaleString("fr-TN", { dateStyle: "short", timeStyle: "short" }) : "";
+const badge = (s) => `<span class="badge ${s}">${{ pending: "Awaiting payment", paid: "Paid", cancelled: "Cancelled" }[s]}</span>`;
+
+try { state.token = sessionStorage.getItem("token"); } catch {}
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 3500);
+}
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  if (opts.json) { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.json); }
+  const res = await fetch(API + path, { ...opts, headers });
+  if (res.status === 401 && state.token) { logout(); throw new Error("Session expired"); }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const body = await res.json(); detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail); } catch {}
+    throw new Error(detail);
+  }
+  return opts.raw ? res : res.json();
+}
+
+async function openFile(path) {
+  // Files need the auth header, so fetch them and open the blob.
+  const win = window.open("", "_blank");
+  try {
+    const res = await api(path, { raw: true });
+    const url = URL.createObjectURL(await res.blob());
+    if (win) win.location = url; else location.href = url;
+  } catch (e) { if (win) win.close(); toast(e.message); }
+}
+
+async function downloadFile(path, name) {
+  try {
+    const res = await api(path, { raw: true });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob()); a.download = name; a.click();
+  } catch (e) { toast(e.message); }
+}
+
+// --- Login -------------------------------------------------------------------------
+
+function renderLogin() {
+  $("#app").innerHTML = `
+    <div class="wrap"><div class="card login stack">
+      <div><h2>Order Desk</h2><p class="muted small">Orders, invoices with QR codes and online payments.</p></div>
+      <div class="row">
+        <button class="btn" data-demo="admin@demo.tn">Demo admin</button>
+        <button class="btn" data-demo="cashier@demo.tn">Demo cashier</button>
+      </div>
+      <form id="login">
+        <input name="username" type="email" placeholder="Email" required autocomplete="username">
+        <input name="password" type="password" placeholder="Password" required autocomplete="current-password">
+        <button class="btn primary" style="width:100%">Log in</button>
+      </form>
+      <p class="small muted">Developer? The API docs are at <a href="/docs">/docs</a>.</p>
+    </div></div>`;
+  document.querySelectorAll("[data-demo]").forEach((b) => b.onclick = () => {
+    $("[name=username]").value = b.dataset.demo; $("[name=password]").value = "demo1234";
+  });
+  $("#login").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api("/auth/login", { method: "POST", body: new URLSearchParams(new FormData(e.target)) });
+      state.token = res.access_token;
+      try { sessionStorage.setItem("token", res.access_token); } catch {}
+      start();
+    } catch (err) { toast(err.message); }
+  };
+}
+
+function logout() {
+  state.token = null; state.me = null;
+  try { sessionStorage.removeItem("token"); } catch {}
+  renderLogin();
+}
+
+// --- Shell -------------------------------------------------------------------------
+
+const TABS = [
+  ["sale", "New sale"], ["orders", "Orders"], ["report", "Today"], ["products", "Stock"],
+];
+
+function renderShell() {
+  $("#app").innerHTML = `
+    <header><div class="wrap">
+      <span class="brand">Order Desk</span><span class="grow"></span>
+      <a class="small muted" href="/docs" target="_blank">API docs</a>
+      <span class="small">${esc(state.me.full_name)} · <span class="muted">${state.me.role}</span></span>
+      <button class="btn small" id="logout">Log out</button>
+    </div></header>
+    <div class="wrap">
+      <nav>${TABS.map(([k, l]) => `<button data-tab="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}</nav>
+      <main id="view"></main>
+    </div>`;
+  $("#logout").onclick = logout;
+  document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { state.tab = b.dataset.tab; state.order = null; renderShell(); });
+  ({ sale: viewSale, orders: viewOrders, report: viewReport, products: viewProducts })[state.tab]();
+}
+
+async function start() {
+  try { state.me = await api("/auth/me"); } catch { return renderLogin(); }
+  renderShell();
+}
+
+// --- New sale ----------------------------------------------------------------------
+
+async function viewSale() {
+  const [products, customers] = await Promise.all([api("/products?limit=200"), api("/customers?limit=200")]);
+  state.products = products.items; state.customers = customers.items;
+  drawSale();
+}
+
+function drawSale() {
+  const cartLines = Object.entries(state.cart).map(([id, q]) => ({ p: state.products.find((p) => p.id == id), q })).filter((l) => l.p);
+  const estimate = cartLines.reduce((s, l) => s + Number(l.p.price_with_tax) * l.q, 0);
+  $("#view").innerHTML = `
+    <div class="grid2">
+      <div class="products">${state.products.map((p) => `
+        <button class="product" data-add="${p.id}" ${p.stock <= (state.cart[p.id] || 0) ? "disabled" : ""}>
+          <b>${esc(p.name)}</b>
+          <span class="price">${money(p.price_with_tax)}</span><br>
+          <span class="small muted">${p.stock} in stock</span>
+        </button>`).join("")}
+      </div>
+      <div class="stack">
+        <div class="card stack">
+          <h2>Cart</h2>
+          ${cartLines.length ? `<table>${cartLines.map((l) => `
+            <tr><td>${esc(l.p.name)}</td>
+              <td class="num"><span class="qty"><button data-dec="${l.p.id}">−</button>${l.q}<button data-add="${l.p.id}" ${l.p.stock <= l.q ? "disabled" : ""}>+</button></span></td></tr>`).join("")}
+            </table>` : `<p class="muted small">Tap a product to add it.</p>`}
+          <select id="customer" style="width:100%">
+            <option value="">Walk-in customer</option>
+            ${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+          </select>
+          <div class="row between"><span class="muted small">Estimate incl. VAT + 1 TND stamp</span>
+            <b class="price">${cartLines.length ? money(estimate + 1) : "–"}</b></div>
+          <button class="btn primary" id="checkout" ${cartLines.length ? "" : "disabled"}>Create order</button>
+        </div>
+        <div id="orderPanel"></div>
+      </div>
+    </div>`;
+  document.querySelectorAll("[data-add]").forEach((b) => b.onclick = () => { state.cart[b.dataset.add] = (state.cart[b.dataset.add] || 0) + 1; drawSale(); });
+  document.querySelectorAll("[data-dec]").forEach((b) => b.onclick = () => {
+    const id = b.dataset.dec; state.cart[id]--; if (!state.cart[id]) delete state.cart[id]; drawSale();
+  });
+  $("#checkout").onclick = async () => {
+    try {
+      const customer_id = $("#customer").value ? Number($("#customer").value) : null;
+      const items = Object.entries(state.cart).map(([product_id, quantity]) => ({ product_id: Number(product_id), quantity }));
+      state.order = await api("/orders", { method: "POST", json: { customer_id, items } });
+      state.cart = {};
+      toast(`Order ${state.order.number} created`);
+      await viewSale();
+    } catch (e) { toast(e.message); }
+  };
+  if (state.order) drawOrderPanel($("#orderPanel"));
+}
+
+function drawOrderPanel(el) {
+  const o = state.order;
+  el.innerHTML = `
+    <div class="card stack">
+      <div class="row between"><h2>${o.number}</h2>${badge(o.status)}</div>
+      <table>
+        ${o.items.map((i) => `<tr><td>${i.quantity} × ${esc(i.name)}</td><td class="num">${money(i.line_total)}</td></tr>`).join("")}
+        <tr><td class="muted">Timbre fiscal</td><td class="num">${money(o.stamp_duty)}</td></tr>
+        <tr><td><b>Total</b></td><td class="num"><b>${money(o.total)}</b></td></tr>
+      </table>
+      ${o.status === "pending" ? `<div class="row">
+        <button class="btn primary" data-pay="cash">Paid in cash</button>
+        <button class="btn" data-pay="online">Pay online</button>
+        <button class="btn" id="cancel">Cancel</button></div>` : ""}
+      <div class="row">
+        <button class="btn" id="pdf">Invoice PDF</button>
+        <a class="btn" href="${o.public_url}" target="_blank">QR page</a>
+        <button class="btn" id="refresh">Refresh</button>
+      </div>
+    </div>`;
+  const reload = async () => { state.order = await api(`/orders/${o.id}`); drawOrderPanel(el); };
+  el.querySelectorAll("[data-pay]").forEach((b) => b.onclick = async () => {
+    try {
+      const p = await api(`/orders/${o.id}/payments`, { method: "POST", json: { method: b.dataset.pay } });
+      if (p.pay_url) { window.open(p.pay_url, "_blank"); toast("Checkout opened in a new tab. Refresh when done."); }
+      await reload();
+    } catch (e) { toast(e.message); }
+  });
+  const cancel = el.querySelector("#cancel");
+  if (cancel) cancel.onclick = async () => {
+    try { await api(`/orders/${o.id}/cancel`, { method: "POST" }); await reload(); toast("Cancelled, stock returned"); }
+    catch (e) { toast(e.message); }
+  };
+  el.querySelector("#pdf").onclick = () => openFile(`/orders/${o.id}/invoice.pdf`);
+  el.querySelector("#refresh").onclick = reload;
+}
+
+// --- Orders ------------------------------------------------------------------------
+
+async function viewOrders(status = "") {
+  const data = await api(`/orders?limit=100${status ? `&status=${status}` : ""}`);
+  $("#view").innerHTML = `
+    <div class="grid2">
+      <div class="card stack">
+        <div class="row between"><h2>Orders</h2>
+          <select id="filter">
+            ${[["", "All"], ["pending", "Awaiting payment"], ["paid", "Paid"], ["cancelled", "Cancelled"]]
+              .map(([v, l]) => `<option value="${v}" ${v === status ? "selected" : ""}>${l}</option>`).join("")}
+          </select></div>
+        <div class="scroll"><table>
+          <tr><th>Number</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th></tr>
+          ${data.items.map((o) => `<tr class="click" data-id="${o.id}">
+            <td>${o.number}</td><td class="small">${when(o.created_at)}</td>
+            <td>${esc(o.customer?.name || "Walk-in")}</td><td>${badge(o.status)}</td>
+            <td class="num">${money(o.total)}</td></tr>`).join("")}
+        </table></div>
+        <p class="small muted">${data.total} orders</p>
+      </div>
+      <div id="orderPanel"><div class="card muted small">Select an order to see it.</div></div>
+    </div>`;
+  $("#filter").onchange = (e) => viewOrders(e.target.value);
+  document.querySelectorAll("[data-id]").forEach((r) => r.onclick = async () => {
+    state.order = data.items.find((o) => o.id == r.dataset.id);
+    drawOrderPanel($("#orderPanel"));
+  });
+}
+
+// --- Report ------------------------------------------------------------------------
+
+async function viewReport(day) {
+  const r = await api(`/reports/daily${day ? `?day=${day}` : ""}`);
+  const isAdmin = state.me.role === "admin";
+  $("#view").innerHTML = `
+    <div class="stack">
+      <div class="row between">
+        <input type="date" id="day" value="${r.date}">
+        ${isAdmin ? `<button class="btn" id="csv">Export last 30 days (CSV)</button>` : ""}
+      </div>
+      <div class="kpis">
+        <div class="card kpi"><div class="muted small">Revenue (TTC)</div><div class="v">${money(r.revenue)}</div></div>
+        <div class="card kpi"><div class="muted small">Paid orders</div><div class="v">${r.orders_paid}</div></div>
+        <div class="card kpi"><div class="muted small">Average basket</div><div class="v">${money(r.average_basket)}</div></div>
+        <div class="card kpi"><div class="muted small">VAT collected</div><div class="v">${money(r.tax_collected)}</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card stack"><h2>Top products</h2>
+          ${r.top_products.length ? `<table><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th></tr>
+            ${r.top_products.map((p) => `<tr><td>${esc(p.name)}</td><td class="num">${p.quantity}</td><td class="num">${money(p.revenue)}</td></tr>`).join("")}
+          </table>` : `<p class="muted small">No sales this day.</p>`}
+        </div>
+        <div class="card stack"><h2>By payment method</h2>
+          <table>${r.payments_by_method.map((m) => `<tr><td>${m.method === "mock" ? "online (sandbox)" : m.method}</td><td class="num">${m.count}</td><td class="num">${money(m.amount)}</td></tr>`).join("") || `<tr><td class="muted small">Nothing yet.</td></tr>`}</table>
+          <p class="small muted">${r.orders_created} orders created, ${r.orders_cancelled} cancelled, ${r.items_sold} items sold.</p>
+        </div>
+      </div>
+    </div>`;
+  $("#day").onchange = (e) => viewReport(e.target.value);
+  const csv = $("#csv");
+  if (csv) csv.onclick = () => {
+    const end = new Date(r.date), start = new Date(end); start.setDate(end.getDate() - 29);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    downloadFile(`/reports/orders.csv?start=${iso(start)}&end=${iso(end)}`, `orders_${iso(start)}_${iso(end)}.csv`);
+  };
+}
+
+// --- Stock -------------------------------------------------------------------------
+
+async function viewProducts() {
+  const data = await api("/products?limit=200");
+  const isAdmin = state.me.role === "admin";
+  $("#view").innerHTML = `
+    <div class="card stack">
+      <h2>Stock</h2>
+      <div class="scroll"><table>
+        <tr><th>SKU</th><th>Product</th><th class="num">Price HT</th><th class="num">VAT</th><th class="num">Stock</th>${isAdmin ? "<th></th>" : ""}</tr>
+        ${data.items.map((p) => `<tr>
+          <td class="small muted">${esc(p.sku)}</td><td>${esc(p.name)}</td>
+          <td class="num">${money(p.unit_price)}</td><td class="num">${Number(p.tax_rate)} %</td>
+          <td class="num">${p.stock <= 5 ? `<span class="badge pending">${p.stock}</span>` : p.stock}</td>
+          ${isAdmin ? `<td class="num"><button class="btn small" data-restock="${p.id}">+ Delivery</button></td>` : ""}</tr>`).join("")}
+      </table></div>
+      ${isAdmin ? "" : `<p class="small muted">Log in as admin to receive deliveries.</p>`}
+    </div>`;
+  document.querySelectorAll("[data-restock]").forEach((b) => b.onclick = async () => {
+    const qty = Number(prompt("How many units arrived?", "24"));
+    if (!qty) return;
+    try { await api(`/products/${b.dataset.restock}/stock`, { method: "POST", json: { delta: qty, note: "Delivery" } }); viewProducts(); toast("Stock updated"); }
+    catch (e) { toast(e.message); }
+  });
+}
+
+state.token ? start() : renderLogin();
+</script>
+</body>
+</html>

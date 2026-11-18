@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orders
+          POSTGRES_PASSWORD: orders
+          POSTGRES_DB: orders
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U orders" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://orders:orders@localhost:5432/orders
+      TEST_DATABASE_URL: postgresql+psycopg://orders:orders@localhost:5432/orders_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.0"
+      - run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Migrations apply cleanly and match the models
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+      - name: Create test database
+        run: PGPASSWORD=orders psql -h localhost -U orders -c "create database orders_test"
+      - name: Tests (PostgreSQL)
+        run: uv run pytest --cov=app --cov-report=term-missing
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t order-invoice-api .
+      - name: Start the stack and smoke-test it
+        run: |
+          docker compose up -d --wait
+          curl --fail --retry 10 --retry-connrefused --retry-delay 3 http://localhost:8000/health
+          curl --fail -X POST http://localhost:8000/api/v1/auth/login \
+            -d "username=admin@demo.tn&password=demo1234"
+      - if: always()
+        run: docker compose logs api
+
+  # Vercel deploys the code on every push to main; this job brings the Neon database up to date.
+  # Needs the repo secret NEON_DATABASE_URL_UNPOOLED (Neon's direct, non-pooled URL).
+  migrate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, docker]
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_UNPOOLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.0"
+      - name: Skip when the database secret isn't set
+        id: check
+        run: echo "ready=${{ env.DATABASE_URL != '' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.check.outputs.ready == 'true'
+        run: uv sync --frozen --no-dev
+      - name: Apply migrations
+        if: steps.check.outputs.ready == 'true'
+        run: uv run --no-dev alembic upgrade head
+      - name: Load demo data if the database is empty
+        if: steps.check.outputs.ready == 'true'
+        run: uv run --no-dev python -m app.seed

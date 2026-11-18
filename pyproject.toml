@@ -1,0 +1,47 @@
+[project]
+name = "order-invoice-api"
+version = "1.0.0"
+description = "Orders, PDF invoices with QR codes, online payments and sales reports for small businesses."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "python-multipart>=0.0.18",
+    "pyjwt>=2.10",
+    "bcrypt>=4.2",
+    "reportlab>=4.2",
+    "segno>=1.6",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["B008", "E501"]  # Depends() in defaults is idiomatic; the formatter owns line length
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+known-third-party = ["alembic"]
+
+[tool.vercel]
+entrypoint = "app.main:app"

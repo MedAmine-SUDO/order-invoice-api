@@ -1,0 +1,32 @@
+# One command: `docker compose up`. Then open http://localhost:8000
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+      POSTGRES_DB: orders
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://orders:orders@db:5432/orders
+      SEED_DEMO: ${SEED_DEMO:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
