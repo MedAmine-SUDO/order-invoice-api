@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     seed_demo: bool = False
     demo_password: str = "demo1234"
-    # Set to enable GET /internal/reset-demo (called nightly by Vercel Cron with this as Bearer).
+    # Set to enable /internal/reset-demo (called daily by a Vercel Schedule with this as Bearer).
     cron_secret: str = ""
 
     # Set by Vercel on every deployment. Serverless instances shouldn't hold a connection pool.

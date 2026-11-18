@@ -51,3 +51,21 @@ def test_database_url_from_neon_gets_the_driver():
 def test_serverless_engine_does_not_pool():
     assert isinstance(make_engine("sqlite://", serverless=True).pool, NullPool)
     assert not isinstance(make_engine("sqlite://").pool, NullPool)
+
+
+def test_reset_accepts_post_too(client, cron_secret):
+    # Vercel Schedules call with POST unless vercel.json says otherwise.
+    r = client.post("/internal/reset-demo", headers={"Authorization": f"Bearer {cron_secret}"})
+    assert r.status_code == 200
+
+
+def test_vercel_schedule_config():
+    import json
+    from pathlib import Path
+
+    config = json.loads((Path(__file__).parent.parent / "vercel.json").read_text())
+    assert "crons" not in config  # both would run the reset twice
+    schedule = config["schedules"]["reset-demo"]
+    assert schedule["path"] == "/internal/reset-demo"
+    assert schedule["requestMethod"] == "GET"
+    assert schedule["timezone"] == "Africa/Tunis"

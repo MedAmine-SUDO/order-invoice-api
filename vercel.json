@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    { "path": "/internal/reset-demo", "schedule": "0 10 * * *" }
-  ]
+  "schedules": {
+    "reset-demo": {
+      "schedule": "0 11 * * *",
+      "timezone": "Africa/Tunis",
+      "path": "/internal/reset-demo",
+      "requestMethod": "GET"
+    }
+  }
 }

@@ -1,6 +1,6 @@
 name: Reset demo
 
-# Wipes the live demo database and loads the demo data again. Vercel Cron does the same
+# Wipes the live demo database and loads the demo data again. A Vercel Schedule does the same
 # every day; this is for doing it now (e.g. right after a schema change).
 on:
   workflow_dispatch:

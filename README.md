@@ -23,7 +23,7 @@ sales journal at the end of the month.
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-serverless-000000?logo=vercel&logoColor=white)
 ![Neon](https://img.shields.io/badge/Neon-Postgres-00E599?logo=postgresql&logoColor=white)
-![pytest](https://img.shields.io/badge/tests-80_passing-0A9EDC?logo=pytest&logoColor=white)
+![pytest](https://img.shields.io/badge/tests-82_passing-0A9EDC?logo=pytest&logoColor=white)
 
 <br/>
 
@@ -133,7 +133,7 @@ flowchart LR
     end
 
     DB[("PostgreSQL (Neon)<br/>Alembic migrations")]
-    CRON["Vercel Cron<br/>daily demo reset"]
+    CRON["Vercel Schedule<br/>daily demo reset"]
     GATEWAY["Flouci / Stripe"]
 
     POS & DEV --> AUTH --> ROUTES --> SVC
@@ -165,7 +165,7 @@ app/
 │   └── payments/        flouci.py · mock.py · stripe.py · konnect.py behind one interface
 └── seed.py              the demo distributor
 alembic/                 migrations, including a data migration (CI checks they match the models)
-tests/                   80 tests, run on PostgreSQL in CI
+tests/                   82 tests, run on PostgreSQL in CI
 frontend/index.html      the sales app, in French: no build step, one file
 postman/                 ready-to-run collection
 ```
@@ -210,8 +210,9 @@ no server to keep running, and the first request after a quiet night answers in 
 4. **GitHub → Settings → Secrets → Actions:** add `NEON_DATABASE_URL_UNPOOLED`. On every push to
    `main`, CI applies the migrations and loads the demo data if the database is empty. The
    **Reset demo** workflow starts the demo over on demand.
-5. Redeploy. [`vercel.json`](vercel.json) schedules `/internal/reset-demo` daily, so whatever
-   visitors change in the demo doesn't last.
+5. Redeploy. [`vercel.json`](vercel.json) defines a Vercel Schedule that calls `/internal/reset-demo`
+   every day at 11:00 Tunis time, so whatever visitors change in the demo doesn't last. Check it under
+   **Schedules** in the project, where **Run Schedule** runs it on demand and each run is listed.
 
 In serverless mode the app opens one connection per request (`NullPool`) and lets Neon's pooler do the
 pooling. It also disables prepared statements, which transaction-mode poolers don't support.
@@ -228,7 +229,7 @@ It is plain PostgreSQL, so the same image runs on Railway, Render, Fly.io, AWS o
 
 | | |
 | --- | --- |
-| 🧪 **Tests** | 80 pytest tests: totals and rounding, gap-free numbering (including across New Year in Tunis time), credit notes, customer snapshots, monthly TVA, the sales journal, stock races, roles, PDFs, each payment gateway with a faked API, webhook signatures (forged, replayed, or with no secret configured), double payment, amounts in words |
+| 🧪 **Tests** | 82 pytest tests: totals and rounding, gap-free numbering (including across New Year in Tunis time), credit notes, customer snapshots, monthly TVA, the sales journal, stock races, roles, PDFs, each payment gateway with a faked API, webhook signatures (forged, replayed, or with no secret configured), double payment, amounts in words |
 | 🔁 **CI** | GitHub Actions: lint, migrations up, `alembic check` (models and migrations agree), migrations down, tests on PostgreSQL 16, Docker build and a smoke test of `docker compose up`, then migrations on the production database |
 | 🗃️ **Migrations** | Schema changes ship with their data migration: when invoices became separate documents, existing paid orders got their invoices, numbered in payment order |
 | ⚙️ **Config** | Everything comes from environment variables ([`.env.example`](.env.example)). The app refuses to start in production with the default secret key |
