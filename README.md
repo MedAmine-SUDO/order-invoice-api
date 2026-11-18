@@ -9,7 +9,9 @@ let the customer scan it to pay online, and see the day's takings at closing tim
 
 <br/>
 
-[![Live demo](https://img.shields.io/badge/Live_demo-coming_soon-111827?style=for-the-badge)](#)
+[![Open the live demo](https://img.shields.io/badge/Open_the_live_demo-→-111827?style=for-the-badge)](https://order-invoice-api.vercel.app/)
+&nbsp;
+[![Swagger docs](https://img.shields.io/badge/Swagger_docs-/docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://order-invoice-api.vercel.app/docs)
 &nbsp;
 [![CI](https://img.shields.io/github/actions/workflow/status/MedAmine-SUDO/order-invoice-api/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/MedAmine-SUDO/order-invoice-api/actions/workflows/ci.yml)
 
@@ -34,8 +36,8 @@ let the customer scan it to pay online, and see the day's takings at closing tim
 
 | | |
 | --- | --- |
-| 🖥️ **Cashier app** | [`/`](#): click **Demo admin**, then **Log in** |
-| 📖 **Swagger docs** | [`/docs`](#): click **Authorize** |
+| 🖥️ **Cashier app** | [order-invoice-api.vercel.app](https://order-invoice-api.vercel.app/): click **Demo admin**, then **Log in** |
+| 📖 **Swagger docs** | [order-invoice-api.vercel.app/docs](https://order-invoice-api.vercel.app/docs): click **Authorize** |
 | 👤 **Demo logins** | `admin@demo.tn` / `demo1234` (everything) · `cashier@demo.tn` / `demo1234` (sales only) |
 | 📮 **Postman** | import [`postman/order-invoice-api.postman_collection.json`](postman/order-invoice-api.postman_collection.json) and run it top to bottom |
 
