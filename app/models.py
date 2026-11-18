@@ -193,7 +193,7 @@ class Payment(Base):
     )
     amount: Mapped[Decimal] = mapped_column(Money)
     currency: Mapped[str] = mapped_column(String(3))
-    # The gateway's id for this payment (Konnect paymentRef, Stripe session id, ...).
+    # The gateway's id for this payment (Flouci payment_id, Stripe session id, ...).
     provider_ref: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     pay_url: Mapped[str | None] = mapped_column(String(1024))
     details: Mapped[dict | None] = mapped_column(JSON)

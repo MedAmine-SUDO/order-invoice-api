@@ -88,8 +88,8 @@ class CustomerOut(ORM, CustomerBase):
 
 
 class ProductCreate(BaseModel):
-    sku: str = Field(min_length=1, max_length=64, examples=["CAFE-EXP"])
-    name: str = Field(min_length=1, max_length=160, examples=["Café express"])
+    sku: str = Field(min_length=1, max_length=64, examples=["PAP-A4-80"])
+    name: str = Field(min_length=1, max_length=160, examples=["Ramette papier A4 80 g"])
     description: str | None = None
     unit_price: Price
     tax_rate: TaxRate = settings.default_tax_rate
@@ -173,7 +173,7 @@ class PaymentOut(ORM):
 class PaymentCreate(BaseModel):
     method: Literal["cash", "cheque", "transfer", "online"] = Field(
         description="`cash`, `cheque` and `transfer` are recorded as paid immediately. `online` "
-        "returns a `pay_url` on the configured gateway (mock sandbox, Konnect or Stripe)."
+        "returns a `pay_url` on the configured gateway (sandbox, Flouci, Stripe or Konnect)."
     )
 
 

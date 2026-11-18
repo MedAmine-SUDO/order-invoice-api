@@ -68,7 +68,8 @@ and VAT rates in the demo data are illustrative.)
   webhooks are signature-checked and every payment is confirmed with Flouci before the order is
   marked paid; a customer can't pay twice, and a late payment on a settled order is flagged for a
   refund. One setting switches to **Stripe** (test mode), **Konnect**, or the built-in **sandbox**
-  that needs no account.
+  that needs no account. The live demo uses the sandbox; the Flouci integration follows Flouci's
+  API documentation and is tested against a simulated Flouci API, ready for a merchant's own keys.
 - 📊 **The numbers the business needs.** Daily takings (by payment method, top products, credit
   notes) and the **monthly TVA by rate**, invoices minus credit notes, ready for the return.
   Exports open straight in Excel in French (`;` and decimal comma): the **sales journal**
@@ -133,13 +134,13 @@ flowchart LR
 
     DB[("PostgreSQL (Neon)<br/>Alembic migrations")]
     CRON["Vercel Cron<br/>daily demo reset"]
-    KONNECT["Flouci / Stripe"]
+    GATEWAY["Flouci / Stripe"]
 
     POS & DEV --> AUTH --> ROUTES --> SVC
     PHONE --> PUBLIC --> SVC
     SVC --> DB
-    SVC --> GW -- "checkout" --> KONNECT
-    KONNECT -- "webhook (verified)" --> ROUTES
+    SVC --> GW -- "checkout" --> GATEWAY
+    GATEWAY -- "webhook (verified)" --> ROUTES
     CRON -. "/internal/reset-demo" .-> SVC
 ```
 
