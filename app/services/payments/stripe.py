@@ -1,7 +1,4 @@
-import hashlib
-import hmac
 import json
-import time
 
 import httpx
 
@@ -12,9 +9,8 @@ from app.services.payments.base import (
     Checkout,
     PaymentError,
     to_minor_units,
+    verify_signature,
 )
-
-SIGNATURE_TOLERANCE_SECONDS = 300
 
 
 class StripeProvider:
@@ -60,16 +56,5 @@ class StripeProvider:
 
 def verify_webhook(payload: bytes, signature_header: str, secret: str) -> dict:
     """Check a Stripe-Signature header and return the decoded event."""
-    pairs = [p.strip().split("=", 1) for p in signature_header.split(",") if "=" in p]
-    timestamp = next((v for k, v in pairs if k == "t"), "")
-    signatures = [v for k, v in pairs if k == "v1"]
-    if not timestamp.isdigit() or not signatures:
-        raise PaymentError("Malformed Stripe-Signature header")
-    if abs(time.time() - int(timestamp)) > SIGNATURE_TOLERANCE_SECONDS:
-        raise PaymentError("Stripe webhook timestamp outside tolerance")
-    expected = hmac.new(
-        secret.encode(), f"{timestamp}.".encode() + payload, hashlib.sha256
-    ).hexdigest()
-    if not any(hmac.compare_digest(expected, s) for s in signatures):
-        raise PaymentError("Invalid Stripe webhook signature")
+    verify_signature(payload, signature_header, secret)
     return json.loads(payload)

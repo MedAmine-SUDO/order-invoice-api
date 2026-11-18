@@ -6,9 +6,11 @@ import time
 import httpx
 import pytest
 
+from app.core.config import settings
 from app.main import app
 from app.models import Payment
 from app.services.payments import get_payment_provider
+from app.services.payments.flouci import FlouciProvider
 from app.services.payments.konnect import KonnectProvider
 from app.services.payments.stripe import StripeProvider
 
@@ -46,7 +48,7 @@ def test_sandbox_checkout_flow(client, cashier_headers, make_order):
     assert again["id"] == payment["id"]
 
     path = httpx.URL(payment["pay_url"]).path
-    assert "Pay 4,570 TND" in client.get(path).text
+    assert "Payer 4,570 TND" in client.get(path).text
     r = client.post(f"{path}/succeed", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/o/")
 
@@ -236,3 +238,108 @@ def test_late_gateway_success_on_paid_order_is_flagged_for_refund(
     payment = db.get(Payment, online["id"])
     assert payment.status == "succeeded"
     assert payment.details["needs_refund"] is True
+
+
+# --- Flouci ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def flouci(monkeypatch):
+    """A Flouci provider talking to a fake Flouci API. Set `.status` to drive verify_payment."""
+    monkeypatch.setattr(settings, "flouci_private_key", "flouci_priv")
+    calls = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls.append(req)
+        if req.url.path.endswith("/generate_payment"):
+            return httpx.Response(200, json={"result": {
+                "success": True, "payment_id": "fl_123",
+                "link": "https://checkout.flouci.com/bureau/fl_123"}})  # fmt: skip
+        return httpx.Response(200, json={"success": fake.status == "SUCCESS",
+                                         "result": {"status": fake.status}})  # fmt: skip
+
+    fake = FlouciProvider(
+        httpx.Client(base_url="https://flouci.test/api/v2", transport=httpx.MockTransport(handler))
+    )
+    fake.status = "PENDING"
+    fake.calls = calls
+    app.dependency_overrides[get_payment_provider] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_payment_provider, None)
+
+
+def _flouci_webhook(client, payment_id="fl_123", secret="flouci_priv", age=0):
+    body = json.dumps({"event": "payment.succeeded", "event_id": "evt_9",
+                       "payment_id": payment_id, "amount": 4570}).encode()  # fmt: skip
+    t = str(int(time.time()) - age)
+    sig = hmac.new(secret.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
+    return client.post("/api/v1/payments/webhooks/flouci", content=body,
+                       headers={"X-Flouci-Signature": f"t={t},v1={sig}"})  # fmt: skip
+
+
+def test_flouci_checkout_sends_millimes(client, cashier_headers, make_order, flouci):
+    order = make_order()
+    payment = _pay(client, cashier_headers, order["id"], "online").json()
+    assert payment["method"] == "flouci"
+    assert payment["pay_url"] == "https://checkout.flouci.com/bureau/fl_123"
+    body = json.loads(flouci.calls[0].content)
+    assert body["amount"] == "4570"  # a string, in millimes
+    assert body["webhook"] == "http://testserver/api/v1/payments/webhooks/flouci"
+    assert body["webhook_version"] == 2
+    assert body["developer_tracking_id"] == str(payment["id"])
+
+
+def test_flouci_webhook_is_confirmed_with_flouci(client, cashier_headers, make_order, flouci):
+    order = make_order()
+    _pay(client, cashier_headers, order["id"], "online")
+
+    flouci.status = "PENDING"  # signed webhook, but Flouci says not yet: no change
+    assert _flouci_webhook(client).status_code == 200
+    assert (
+        client.get(f"/api/v1/orders/{order['id']}", headers=cashier_headers).json()["status"]
+        == "pending"
+    )
+
+    flouci.status = "SUCCESS"
+    assert _flouci_webhook(client).status_code == 200
+    paid = client.get(f"/api/v1/orders/{order['id']}", headers=cashier_headers).json()
+    assert paid["status"] == "paid" and paid["invoice"]["number"].startswith("FAC-")
+    assert flouci.calls[-1].url.path.endswith("/verify_payment/fl_123")
+
+
+def test_flouci_failed_payment(client, cashier_headers, make_order, flouci, db):
+    order = make_order()
+    payment = _pay(client, cashier_headers, order["id"], "online").json()
+    flouci.status = "EXPIRED"
+    _flouci_webhook(client)
+    assert db.get(Payment, payment["id"]).status == "failed"
+
+
+@pytest.mark.parametrize(
+    "secret,age", [("wrong", 0), ("flouci_priv", 3600)], ids=["bad-secret", "replayed"]
+)
+def test_flouci_webhook_rejects_bad_signatures(
+    client, cashier_headers, make_order, flouci, secret, age
+):
+    order = make_order()
+    _pay(client, cashier_headers, order["id"], "online")
+    flouci.status = "SUCCESS"
+    assert _flouci_webhook(client, secret=secret, age=age).status_code == 400
+    assert (
+        client.get(f"/api/v1/orders/{order['id']}", headers=cashier_headers).json()["status"]
+        == "pending"
+    )
+
+
+def test_webhook_refused_when_no_secret_is_configured(client, monkeypatch):
+    # With an empty key anyone could compute a "valid" signature.
+    monkeypatch.setattr(settings, "flouci_private_key", "")
+    assert _flouci_webhook(client, secret="").status_code == 400
+
+
+def test_return_page_catches_up_before_the_webhook(client, cashier_headers, make_order, flouci):
+    order = make_order()
+    _pay(client, cashier_headers, order["id"], "online")
+    flouci.status = "SUCCESS"
+    token = httpx.URL(order["public_url"]).path.rsplit("/", 1)[-1]
+    assert "Payée" in client.get(f"/o/{token}").text

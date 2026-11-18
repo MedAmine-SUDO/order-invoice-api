@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
 from app.core.config import settings
-from app.models import OrderStatus, PaymentMethod, PaymentStatus, Role
+from app.models import InvoiceKind, OrderStatus, PaymentMethod, PaymentStatus, Role
 
 Price = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=3, examples=["4.500"])]
 TaxRate = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2, examples=["19"])]
@@ -164,15 +164,39 @@ class PaymentOut(ORM):
 
 
 class PaymentCreate(BaseModel):
-    method: Literal["cash", "online"] = Field(
-        description="`cash` is recorded as paid immediately. `online` returns a `pay_url` "
-        "on the configured gateway (mock sandbox, Konnect or Stripe)."
+    method: Literal["cash", "cheque", "transfer", "online"] = Field(
+        description="`cash`, `cheque` and `transfer` are recorded as paid immediately. `online` "
+        "returns a `pay_url` on the configured gateway (mock sandbox, Konnect or Stripe)."
     )
+
+
+class InvoiceRef(ORM):
+    id: int
+    number: str
+    issued_at: datetime
+    total: Decimal
+
+    @computed_field
+    @property
+    def pdf_url(self) -> str:
+        return f"{settings.public_base_url}/api/v1/invoices/{self.id}/pdf"
+
+
+class InvoiceOut(InvoiceRef):
+    kind: InvoiceKind
+    order_id: int
+    credited_invoice_id: int | None
+    customer: dict | None = Field(description="The customer as they were at issue time.")
+    subtotal: Decimal
+    tax_total: Decimal
+    stamp_duty: Decimal
+    currency: str
+    reason: str | None
 
 
 class OrderOut(ORM):
     id: int
-    number: str
+    number: str = Field(description="Order form (bon de commande) number. Not an invoice number.")
     status: OrderStatus
     customer: CustomerOut | None
     created_by_id: int
@@ -186,19 +210,30 @@ class OrderOut(ORM):
     created_at: datetime
     paid_at: datetime | None
     cancelled_at: datetime | None
+    refunded_at: datetime | None
+    invoice: InvoiceRef | None = Field(
+        description="Issued at payment, or earlier with POST /orders/{id}/invoice."
+    )
+    credit_note: InvoiceRef | None = Field(description="Issued when an invoiced order is undone.")
     payments: list[PaymentOut]
     public_token: str = Field(exclude=True)
 
     @computed_field
     @property
     def public_url(self) -> str:
-        """The page the invoice QR code points to."""
+        """The page the QR code on the documents points to."""
         return f"{settings.public_base_url}/o/{self.public_token}"
 
     @computed_field
     @property
-    def invoice_url(self) -> str:
-        return f"{settings.public_base_url}/api/v1/orders/{self.id}/invoice.pdf"
+    def document_url(self) -> str:
+        """The order's current PDF: the invoice once paid, the order form before that."""
+        return f"{settings.public_base_url}/api/v1/orders/{self.id}/document.pdf"
+
+
+class CreditNoteCreate(BaseModel):
+    reason: str = Field(min_length=3, max_length=255, examples=["Marchandise retournée"])
+    restock: bool = Field(default=True, description="Put the items back in stock.")
 
 
 class PublicOrderItem(ORM):
@@ -209,12 +244,18 @@ class PublicOrderItem(ORM):
 
 class PublicOrder(ORM):
     number: str
+    invoice: InvoiceRef | None = Field(exclude=True)
     status: OrderStatus
     total: Decimal
     currency: str
     created_at: datetime
     paid_at: datetime | None
     items: list[PublicOrderItem]
+
+    @computed_field
+    @property
+    def invoice_number(self) -> str | None:
+        return self.invoice.number if self.invoice else None
 
 
 # --- Reports ----------------------------------------------------------------------
@@ -241,8 +282,35 @@ class DailyReport(BaseModel):
     orders_paid: int
     orders_cancelled: int
     revenue: Decimal = Field(description="Total collected (TTC) on orders paid that day.")
+    refunds: Decimal = Field(description="Total of the credit notes issued that day.")
+    net_revenue: Decimal
     tax_collected: Decimal
     average_basket: Decimal
     items_sold: int
     payments_by_method: list[MethodTotal]
     top_products: list[TopProduct]
+
+
+class VatLine(BaseModel):
+    rate: Decimal
+    base: Decimal = Field(
+        description="Taxable amount before tax (HT), invoices minus credit notes."
+    )
+    vat: Decimal
+    total: Decimal
+
+
+class VatReport(BaseModel):
+    """What the accountant needs for the monthly TVA return."""
+
+    month: str = Field(examples=["2026-11"])
+    currency: str
+    invoices: int
+    credit_notes: int
+    first_invoice: str | None
+    last_invoice: str | None
+    by_rate: list[VatLine]
+    base: Decimal
+    vat: Decimal
+    fiscal_stamps: Decimal
+    total: Decimal

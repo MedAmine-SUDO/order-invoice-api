@@ -1,31 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Order Desk</title>
+<title>Caisse & Facturation</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
     --accent: #0f766e; --accent-ink: #ffffff; --soft: #f0fdfa;
     --amber: #b45309; --amber-bg: #fef3c7; --green: #047857; --green-bg: #d1fae5;
-    --red: #b91c1c; --red-bg: #fee2e2;
+    --red: #b91c1c; --red-bg: #fee2e2; --blue: #1d4ed8; --blue-bg: #dbeafe;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0b0f17; --card: #111827; --ink: #f3f4f6; --muted: #9ca3af; --line: #263041;
       --accent: #2dd4bf; --accent-ink: #042f2e; --soft: #0f2a28;
       --amber: #fbbf24; --amber-bg: #3a2a06; --green: #34d399; --green-bg: #06281d;
-      --red: #f87171; --red-bg: #3b0d0d;
+      --red: #f87171; --red-bg: #3b0d0d; --blue: #93c5fd; --blue-bg: #0c1f40;
     }
   }
   * { box-sizing: border-box }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif }
   button, input, select { font: inherit; color: inherit }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px }
   header { border-bottom: 1px solid var(--line); background: var(--card) }
-  header .wrap { display: flex; align-items: center; gap: 16px; height: 56px }
+  header .wrap { display: flex; align-items: center; gap: 16px; min-height: 56px; flex-wrap: wrap }
   .brand { font-weight: 700 } .grow { flex: 1 }
   .muted { color: var(--muted) } .small { font-size: 13px }
   nav { display: flex; gap: 4px; overflow-x: auto; padding: 12px 0 }
@@ -33,41 +33,46 @@
                color: var(--muted); font-weight: 600; white-space: nowrap }
   nav button.on { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px }
-  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 9px; padding: 8px 14px;
-         cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 9px; padding: 7px 13px;
+         cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; font-size: 14px;
+         color: var(--ink) }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+  .btn.danger { color: var(--red) }
   .btn:disabled { opacity: .5; cursor: default }
-  .grid2 { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start }
-  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr } }
-  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+  .grid2 { display: grid; grid-template-columns: 1fr 440px; gap: 16px; align-items: start }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr } }
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px }
   .product { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
              padding: 12px; cursor: pointer }
   .product:hover { border-color: var(--accent) } .product:disabled { opacity: .45; cursor: default }
-  .product b { display: block; font-size: 14px } .price { font-variant-numeric: tabular-nums }
+  .product b { display: block; font-size: 14px; line-height: 1.3; margin-bottom: 4px }
+  .price { font-variant-numeric: tabular-nums }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums }
   th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 8px 6px;
        border-bottom: 1px solid var(--line) }
-  td { padding: 9px 6px; border-bottom: 1px solid var(--line) }
-  .num { text-align: right } tr.click { cursor: pointer } tr.click:hover td { background: var(--soft) }
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600 }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle }
+  .num, .nowrap { text-align: right; white-space: nowrap } .nowrap { text-align: left } tr.click { cursor: pointer } tr.click:hover td { background: var(--soft) }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600;
+           white-space: nowrap }
   .pending { color: var(--amber); background: var(--amber-bg) }
   .paid { color: var(--green); background: var(--green-bg) }
   .cancelled { color: var(--red); background: var(--red-bg) }
+  .refunded { color: var(--blue); background: var(--blue-bg) }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
   .between { justify-content: space-between }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px }
-  .kpi .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums }
-  .qty { display: inline-flex; align-items: center; gap: 6px }
-  .qty button { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
-                background: var(--card); cursor: pointer }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px }
+  .kpi .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums }
   input, select { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 10px }
-  .login { max-width: 380px; margin: 10vh auto; }
+  input.qty { width: 64px; text-align: right; padding: 4px 6px }
+  .login { max-width: 400px; margin: 10vh auto; }
   .login input { width: 100%; margin-bottom: 10px }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--ink);
-           color: var(--bg); padding: 10px 16px; border-radius: 10px; display: none; max-width: 90vw }
+           color: var(--bg); padding: 10px 16px; border-radius: 10px; display: none; max-width: 90vw; z-index: 10 }
   .stack > * + * { margin-top: 14px }
   .scroll { overflow-x: auto }
-  h2 { font-size: 17px; margin: 0 }
+  h2 { font-size: 17px; margin: 0 } h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600 }
+  .note { background: var(--soft); border-radius: 10px; padding: 10px 12px; font-size: 13px }
+  .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1 }
 </style>
 </head>
 <body>
@@ -76,18 +81,27 @@
 
 <script>
 const API = "/api/v1";
-const state = { token: null, me: null, tab: "sale", products: [], customers: [], cart: {}, order: null };
+const state = { token: null, me: null, tab: "sale", products: [], customers: [], cart: {}, order: null, search: "" };
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const money = (v) => `${Number(v).toLocaleString("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`;
-const when = (iso) => iso ? new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z").toLocaleString("fr-TN", { dateStyle: "short", timeStyle: "short" }) : "";
-const badge = (s) => `<span class="badge ${s}">${{ pending: "Awaiting payment", paid: "Paid", cancelled: "Cancelled" }[s]}</span>`;
+const money = (v) => `${Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} DT`;
+const when = (iso, time = true) => iso ? new Date(/[Z+]/.test(iso.slice(-6)) ? iso : iso + "Z")
+  .toLocaleString("fr-FR", time ? { dateStyle: "short", timeStyle: "short" } : { dateStyle: "short" }) : "";
+const iso = (d) => d.toISOString().slice(0, 10);
+const isAdmin = () => state.me?.role === "admin";
+
+const STATUS = { pending: "En attente", paid: "Payée", cancelled: "Annulée", refunded: "Remboursée" };
+const METHOD = { cash: "Espèces", cheque: "Chèque", transfer: "Virement", mock: "En ligne (test)", flouci: "Flouci", konnect: "Konnect", stripe: "Carte (Stripe)" };
+function badge(o) {
+  if (o.status === "pending" && o.invoice) return `<span class="badge pending">Facturée · impayée</span>`;
+  return `<span class="badge ${o.status}">${STATUS[o.status]}</span>`;
+}
 
 try { state.token = sessionStorage.getItem("token"); } catch {}
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 3500);
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 3800);
 }
 
 async function api(path, opts = {}) {
@@ -95,17 +109,17 @@ async function api(path, opts = {}) {
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (opts.json) { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.json); }
   const res = await fetch(API + path, { ...opts, headers });
-  if (res.status === 401 && state.token) { logout(); throw new Error("Session expired"); }
+  if (res.status === 401 && state.token) { logout(); throw new Error("Session expirée, reconnectez-vous"); }
   if (!res.ok) {
     let detail = res.statusText;
-    try { const body = await res.json(); detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail); } catch {}
+    try { const body = await res.json(); detail = typeof body.detail === "string" ? body.detail : "Données invalides"; } catch {}
     throw new Error(detail);
   }
   return opts.raw ? res : res.json();
 }
 
 async function openFile(path) {
-  // Files need the auth header, so fetch them and open the blob.
+  // The PDFs need the login token, so fetch them and open the result.
   const win = window.open("", "_blank");
   try {
     const res = await api(path, { raw: true });
@@ -122,22 +136,23 @@ async function downloadFile(path, name) {
   } catch (e) { toast(e.message); }
 }
 
-// --- Login -------------------------------------------------------------------------
+// --- Connexion ---------------------------------------------------------------------
 
 function renderLogin() {
   $("#app").innerHTML = `
     <div class="wrap"><div class="card login stack">
-      <div><h2>Order Desk</h2><p class="muted small">Orders, invoices with QR codes and online payments.</p></div>
+      <div><h2>Caisse & Facturation</h2>
+        <p class="muted small">Commandes, factures avec QR code, paiements et TVA. Démo : un distributeur de fournitures de bureau à Tunis.</p></div>
       <div class="row">
-        <button class="btn" data-demo="admin@demo.tn">Demo admin</button>
-        <button class="btn" data-demo="cashier@demo.tn">Demo cashier</button>
+        <button class="btn" data-demo="admin@demo.tn">Démo gérant</button>
+        <button class="btn" data-demo="cashier@demo.tn">Démo comptoir</button>
       </div>
       <form id="login">
-        <input name="username" type="email" placeholder="Email" required autocomplete="username">
-        <input name="password" type="password" placeholder="Password" required autocomplete="current-password">
-        <button class="btn primary" style="width:100%">Log in</button>
+        <input name="username" type="email" placeholder="E-mail" required autocomplete="username">
+        <input name="password" type="password" placeholder="Mot de passe" required autocomplete="current-password">
+        <button class="btn primary" style="width:100%">Se connecter</button>
       </form>
-      <p class="small muted">Developer? The API docs are at <a href="/docs">/docs</a>.</p>
+      <p class="small muted">Les données de démo sont remises à zéro chaque jour. Développeur ? L'API est documentée sur <a href="/docs">/docs</a>.</p>
     </div></div>`;
   document.querySelectorAll("[data-demo]").forEach((b) => b.onclick = () => {
     $("[name=username]").value = b.dataset.demo; $("[name=password]").value = "demo1234";
@@ -149,7 +164,7 @@ function renderLogin() {
       state.token = res.access_token;
       try { sessionStorage.setItem("token", res.access_token); } catch {}
       start();
-    } catch (err) { toast(err.message); }
+    } catch (err) { toast(err.message === "Wrong email or password" ? "E-mail ou mot de passe incorrect" : err.message); }
   };
 }
 
@@ -159,27 +174,26 @@ function logout() {
   renderLogin();
 }
 
-// --- Shell -------------------------------------------------------------------------
+// --- Structure ---------------------------------------------------------------------
 
-const TABS = [
-  ["sale", "New sale"], ["orders", "Orders"], ["report", "Today"], ["products", "Stock"],
-];
+const TABS = [["sale", "Nouvelle vente"], ["orders", "Commandes"], ["invoices", "Factures"], ["reports", "Rapports"], ["stock", "Stock"]];
 
 function renderShell() {
   $("#app").innerHTML = `
     <header><div class="wrap">
-      <span class="brand">Order Desk</span><span class="grow"></span>
-      <a class="small muted" href="/docs" target="_blank">API docs</a>
-      <span class="small">${esc(state.me.full_name)} · <span class="muted">${state.me.role}</span></span>
-      <button class="btn small" id="logout">Log out</button>
+      <span class="brand">Caisse & Facturation</span><span class="grow"></span>
+      <a class="small muted" href="/docs" target="_blank">API</a>
+      <span class="small">${esc(state.me.full_name)}</span>
+      <button class="btn small" id="logout">Déconnexion</button>
     </div></header>
     <div class="wrap">
       <nav>${TABS.map(([k, l]) => `<button data-tab="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}</nav>
-      <main id="view"></main>
+      <main id="view" style="padding-bottom:40px"></main>
     </div>`;
   $("#logout").onclick = logout;
   document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { state.tab = b.dataset.tab; state.order = null; renderShell(); });
-  ({ sale: viewSale, orders: viewOrders, report: viewReport, products: viewProducts })[state.tab]();
+  ({ sale: viewSale, orders: () => viewOrders(), invoices: () => viewInvoices(), reports: () => viewReports(), stock: viewStock })[state.tab]()
+    .catch((e) => toast(e.message));
 }
 
 async function start() {
@@ -187,7 +201,7 @@ async function start() {
   renderShell();
 }
 
-// --- New sale ----------------------------------------------------------------------
+// --- Nouvelle vente ----------------------------------------------------------------
 
 async function viewSale() {
   const [products, customers] = await Promise.all([api("/products?limit=200"), api("/customers?limit=200")]);
@@ -196,179 +210,272 @@ async function viewSale() {
 }
 
 function drawSale() {
-  const cartLines = Object.entries(state.cart).map(([id, q]) => ({ p: state.products.find((p) => p.id == id), q })).filter((l) => l.p);
-  const estimate = cartLines.reduce((s, l) => s + Number(l.p.price_with_tax) * l.q, 0);
+  const lines = Object.entries(state.cart).map(([id, q]) => ({ p: state.products.find((p) => p.id == id), q })).filter((l) => l.p);
+  const ht = lines.reduce((s, l) => s + Number(l.p.unit_price) * l.q, 0);
+  const ttc = lines.reduce((s, l) => s + Number(l.p.price_with_tax) * l.q, 0);
+  const q = state.search.toLowerCase();
+  const shown = state.products.filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
   $("#view").innerHTML = `
     <div class="grid2">
-      <div class="products">${state.products.map((p) => `
-        <button class="product" data-add="${p.id}" ${p.stock <= (state.cart[p.id] || 0) ? "disabled" : ""}>
-          <b>${esc(p.name)}</b>
-          <span class="price">${money(p.price_with_tax)}</span><br>
-          <span class="small muted">${p.stock} in stock</span>
-        </button>`).join("")}
+      <div class="stack">
+        <input id="search" placeholder="Rechercher un article ou une référence…" value="${esc(state.search)}" style="width:100%">
+        <div class="products">${shown.map((p) => `
+          <button class="product" data-add="${p.id}" ${p.stock <= (state.cart[p.id] || 0) ? "disabled" : ""}>
+            <b>${esc(p.name)}</b>
+            <span class="price">${money(p.unit_price)} HT</span><br>
+            <span class="small muted">${money(p.price_with_tax)} TTC · ${p.stock} en stock</span>
+          </button>`).join("") || `<p class="muted">Aucun article.</p>`}
+        </div>
       </div>
       <div class="stack">
         <div class="card stack">
-          <h2>Cart</h2>
-          ${cartLines.length ? `<table>${cartLines.map((l) => `
-            <tr><td>${esc(l.p.name)}</td>
-              <td class="num"><span class="qty"><button data-dec="${l.p.id}">−</button>${l.q}<button data-add="${l.p.id}" ${l.p.stock <= l.q ? "disabled" : ""}>+</button></span></td></tr>`).join("")}
-            </table>` : `<p class="muted small">Tap a product to add it.</p>`}
+          <h2>Panier</h2>
+          ${lines.length ? `<table>${lines.map((l) => `
+            <tr><td>${esc(l.p.name)}<br><span class="small muted">${money(l.p.unit_price)} HT</span></td>
+              <td class="num"><input class="qty" type="number" min="0" max="${l.p.stock}" value="${l.q}" data-qty="${l.p.id}"></td>
+              <td class="num"><button class="x" data-del="${l.p.id}" title="Retirer">×</button></td></tr>`).join("")}
+            </table>` : `<p class="muted small">Cliquez sur un article pour l'ajouter.</p>`}
           <select id="customer" style="width:100%">
-            <option value="">Walk-in customer</option>
-            ${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+            <option value="">Client de passage</option>
+            ${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}${c.tax_id ? " · MF " + esc(c.tax_id) : ""}</option>`).join("")}
           </select>
-          <div class="row between"><span class="muted small">Estimate incl. VAT + 1 TND stamp</span>
-            <b class="price">${cartLines.length ? money(estimate + 1) : "–"}</b></div>
-          <button class="btn primary" id="checkout" ${cartLines.length ? "" : "disabled"}>Create order</button>
+          <div class="row between small"><span class="muted">Total HT</span><span class="price">${lines.length ? money(ht) : "–"}</span></div>
+          <div class="row between"><span class="muted small">TTC estimé (+ timbre 1 DT)</span><b class="price">${lines.length ? money(ttc + 1) : "–"}</b></div>
+          <button class="btn primary" id="checkout" ${lines.length ? "" : "disabled"}>Créer la commande</button>
         </div>
         <div id="orderPanel"></div>
       </div>
     </div>`;
+  const search = $("#search");
+  search.oninput = () => { state.search = search.value; drawSale(); const s = $("#search"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); };
   document.querySelectorAll("[data-add]").forEach((b) => b.onclick = () => { state.cart[b.dataset.add] = (state.cart[b.dataset.add] || 0) + 1; drawSale(); });
-  document.querySelectorAll("[data-dec]").forEach((b) => b.onclick = () => {
-    const id = b.dataset.dec; state.cart[id]--; if (!state.cart[id]) delete state.cart[id]; drawSale();
+  document.querySelectorAll("[data-qty]").forEach((i) => i.onchange = () => {
+    const n = Math.max(0, Math.floor(Number(i.value) || 0));
+    if (n) state.cart[i.dataset.qty] = n; else delete state.cart[i.dataset.qty];
+    drawSale();
   });
+  document.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => { delete state.cart[b.dataset.del]; drawSale(); });
   $("#checkout").onclick = async () => {
     try {
       const customer_id = $("#customer").value ? Number($("#customer").value) : null;
       const items = Object.entries(state.cart).map(([product_id, quantity]) => ({ product_id: Number(product_id), quantity }));
       state.order = await api("/orders", { method: "POST", json: { customer_id, items } });
       state.cart = {};
-      toast(`Order ${state.order.number} created`);
+      toast(`Commande ${state.order.number} créée`);
       await viewSale();
     } catch (e) { toast(e.message); }
   };
   if (state.order) drawOrderPanel($("#orderPanel"));
 }
 
-function drawOrderPanel(el) {
+// --- Fiche commande ----------------------------------------------------------------
+
+function drawOrderPanel(el, onChange) {
   const o = state.order;
+  const pending = o.status === "pending";
+  const paid = o.payments.find((p) => p.status === "succeeded");
   el.innerHTML = `
     <div class="card stack">
-      <div class="row between"><h2>${o.number}</h2>${badge(o.status)}</div>
+      <div class="row between"><div><h2>${o.invoice ? o.invoice.number : o.number}</h2>
+        <span class="small muted">${o.invoice ? "Bon de commande " + o.number : "Bon de commande"} · ${when(o.created_at)}</span></div>${badge(o)}</div>
+      <div class="small">${o.customer ? `<b>${esc(o.customer.name)}</b>${o.customer.tax_id ? " · MF " + esc(o.customer.tax_id) : ""}` : "Client de passage"}</div>
       <table>
-        ${o.items.map((i) => `<tr><td>${i.quantity} × ${esc(i.name)}</td><td class="num">${money(i.line_total)}</td></tr>`).join("")}
+        ${o.items.map((i) => `<tr><td>${i.quantity} × ${esc(i.name)}</td><td class="num">${money(i.line_subtotal)}</td></tr>`).join("")}
+        <tr><td class="muted">Total HT</td><td class="num">${money(o.subtotal)}</td></tr>
+        <tr><td class="muted">TVA</td><td class="num">${money(o.tax_total)}</td></tr>
         <tr><td class="muted">Timbre fiscal</td><td class="num">${money(o.stamp_duty)}</td></tr>
-        <tr><td><b>Total</b></td><td class="num"><b>${money(o.total)}</b></td></tr>
+        <tr><td><b>Total TTC</b></td><td class="num"><b>${money(o.total)}</b></td></tr>
       </table>
-      ${o.status === "pending" ? `<div class="row">
-        <button class="btn primary" data-pay="cash">Paid in cash</button>
-        <button class="btn" data-pay="online">Pay online</button>
-        <button class="btn" id="cancel">Cancel</button></div>` : ""}
+      ${paid ? `<p class="small muted">Réglée par ${METHOD[paid.method]} le ${when(paid.completed_at)}</p>` : ""}
+      ${o.credit_note ? `<p class="small muted">Avoir ${o.credit_note.number} du ${when(o.credit_note.issued_at, false)}</p>` : ""}
+      ${pending ? `
+        <h3>Encaisser</h3>
+        <div class="row">
+          <button class="btn primary" data-pay="cash">Espèces</button>
+          <button class="btn" data-pay="cheque">Chèque</button>
+          <button class="btn" data-pay="transfer">Virement</button>
+          <button class="btn" data-pay="online">En ligne</button>
+        </div>` : ""}
+      <h3>Documents</h3>
       <div class="row">
-        <button class="btn" id="pdf">Invoice PDF</button>
-        <a class="btn" href="${o.public_url}" target="_blank">QR page</a>
-        <button class="btn" id="refresh">Refresh</button>
+        <button class="btn" data-pdf="/orders/${o.id}/document.pdf">${o.invoice ? "Facture PDF" : "Bon de commande PDF"}</button>
+        ${o.credit_note ? `<button class="btn" data-pdf="/invoices/${o.credit_note.id}/pdf">Avoir PDF</button>` : ""}
+        <a class="btn" href="${o.public_url}" target="_blank">Page QR client</a>
       </div>
+      ${pending && !o.invoice ? `
+        <div class="row">
+          ${o.customer ? `<button class="btn" id="invoiceNow" title="Pour un client payant à terme">Facturer maintenant</button>` : ""}
+          <button class="btn danger" id="cancel">Annuler la commande</button>
+        </div>` : ""}
+      ${o.invoice && !o.credit_note && isAdmin() ? `<div id="creditBox"><button class="btn danger" id="credit">${pending ? "Annuler la facture par un avoir" : "Rembourser par un avoir"}</button></div>` : ""}
+      ${o.invoice && !o.credit_note && !isAdmin() ? `<p class="small muted">Une facture ne s'annule que par un avoir (compte gérant).</p>` : ""}
     </div>`;
-  const reload = async () => { state.order = await api(`/orders/${o.id}`); drawOrderPanel(el); };
-  el.querySelectorAll("[data-pay]").forEach((b) => b.onclick = async () => {
-    try {
-      const p = await api(`/orders/${o.id}/payments`, { method: "POST", json: { method: b.dataset.pay } });
-      if (p.pay_url) { window.open(p.pay_url, "_blank"); toast("Checkout opened in a new tab. Refresh when done."); }
-      await reload();
-    } catch (e) { toast(e.message); }
-  });
+  const reload = async () => { state.order = await api(`/orders/${o.id}`); drawOrderPanel(el, onChange); onChange?.(); };
+  const act = (fn, msg) => async () => { try { await fn(); await reload(); if (msg) toast(msg); } catch (e) { toast(e.message); } };
+  el.querySelectorAll("[data-pay]").forEach((b) => b.onclick = act(async () => {
+    const p = await api(`/orders/${o.id}/payments`, { method: "POST", json: { method: b.dataset.pay } });
+    if (p.pay_url) { window.open(p.pay_url, "_blank"); toast("Paiement ouvert dans un nouvel onglet. Revenez ici ensuite."); }
+  }, b.dataset.pay === "online" ? null : "Paiement enregistré, facture émise"));
+  el.querySelectorAll("[data-pdf]").forEach((b) => b.onclick = () => openFile(b.dataset.pdf));
+  const inv = el.querySelector("#invoiceNow");
+  if (inv) inv.onclick = act(() => api(`/orders/${o.id}/invoice`, { method: "POST" }), "Facture émise");
   const cancel = el.querySelector("#cancel");
-  if (cancel) cancel.onclick = async () => {
-    try { await api(`/orders/${o.id}/cancel`, { method: "POST" }); await reload(); toast("Cancelled, stock returned"); }
-    catch (e) { toast(e.message); }
+  if (cancel) cancel.onclick = act(() => api(`/orders/${o.id}/cancel`, { method: "POST" }), "Commande annulée, stock rétabli");
+  const credit = el.querySelector("#credit");
+  if (credit) credit.onclick = () => {
+    $("#creditBox").innerHTML = `
+      <div class="note stack">
+        <b>Émettre un avoir sur ${o.invoice.number}</b>
+        <select id="reason" style="width:100%">
+          <option>Marchandise retournée</option><option>Erreur de quantité</option>
+          <option>Article défectueux</option><option>Geste commercial</option>
+        </select>
+        <label class="row small"><input type="checkbox" id="restock" checked> Remettre les articles en stock</label>
+        <div class="row"><button class="btn primary" id="confirmCredit">Émettre l'avoir</button><button class="btn" id="cancelCredit">Retour</button></div>
+      </div>`;
+    $("#cancelCredit").onclick = () => drawOrderPanel(el, onChange);
+    $("#confirmCredit").onclick = act(() => api(`/orders/${o.id}/credit-note`, {
+      method: "POST", json: { reason: $("#reason").value, restock: $("#restock").checked },
+    }), "Avoir émis");
   };
-  el.querySelector("#pdf").onclick = () => openFile(`/orders/${o.id}/invoice.pdf`);
-  el.querySelector("#refresh").onclick = reload;
 }
 
-// --- Orders ------------------------------------------------------------------------
+// --- Commandes ---------------------------------------------------------------------
 
-async function viewOrders(status = "") {
-  const data = await api(`/orders?limit=100${status ? `&status=${status}` : ""}`);
+const FILTERS = [["", "Toutes"], ["unpaid", "Factures impayées"], ["pending", "En attente"], ["paid", "Payées"], ["cancelled", "Annulées"], ["refunded", "Remboursées"]];
+
+async function viewOrders(filter = "") {
+  const qs = filter === "unpaid" ? "&status=pending&invoiced=true" : filter ? `&status=${filter}` : "";
+  const data = await api(`/orders?limit=200${qs}`);
+  const due = data.items.reduce((s, o) => s + Number(o.total), 0);
   $("#view").innerHTML = `
     <div class="grid2">
       <div class="card stack">
-        <div class="row between"><h2>Orders</h2>
-          <select id="filter">
-            ${[["", "All"], ["pending", "Awaiting payment"], ["paid", "Paid"], ["cancelled", "Cancelled"]]
-              .map(([v, l]) => `<option value="${v}" ${v === status ? "selected" : ""}>${l}</option>`).join("")}
-          </select></div>
+        <div class="row between"><h2>Commandes</h2>
+          <select id="filter">${FILTERS.map(([v, l]) => `<option value="${v}" ${v === filter ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        ${filter === "unpaid" ? `<div class="note">${data.total} factures à encaisser, pour un total de <b>${money(due)}</b>.</div>` : ""}
         <div class="scroll"><table>
-          <tr><th>Number</th><th>Date</th><th>Customer</th><th>Status</th><th class="num">Total</th></tr>
+          <tr><th>N°</th><th>Date</th><th>Client</th><th>Statut</th><th class="num">Total TTC</th></tr>
           ${data.items.map((o) => `<tr class="click" data-id="${o.id}">
-            <td>${o.number}</td><td class="small">${when(o.created_at)}</td>
-            <td>${esc(o.customer?.name || "Walk-in")}</td><td>${badge(o.status)}</td>
+            <td class="nowrap">${o.invoice ? o.invoice.number : o.number}</td><td class="small">${when(o.created_at, false)}</td>
+            <td>${esc(o.customer?.name || "Client de passage")}</td><td>${badge(o)}</td>
             <td class="num">${money(o.total)}</td></tr>`).join("")}
         </table></div>
-        <p class="small muted">${data.total} orders</p>
+        <p class="small muted">${data.total} commande${data.total > 1 ? "s" : ""}</p>
       </div>
-      <div id="orderPanel"><div class="card muted small">Select an order to see it.</div></div>
+      <div id="orderPanel"><div class="card muted small">Sélectionnez une commande.</div></div>
     </div>`;
   $("#filter").onchange = (e) => viewOrders(e.target.value);
-  document.querySelectorAll("[data-id]").forEach((r) => r.onclick = async () => {
+  document.querySelectorAll("[data-id]").forEach((r) => r.onclick = () => {
     state.order = data.items.find((o) => o.id == r.dataset.id);
-    drawOrderPanel($("#orderPanel"));
+    drawOrderPanel($("#orderPanel"), () => viewOrders(filter));
   });
 }
 
-// --- Report ------------------------------------------------------------------------
+// --- Factures ----------------------------------------------------------------------
 
-async function viewReport(day) {
+async function viewInvoices(kind = "") {
+  const data = await api(`/invoices?limit=200${kind ? `&kind=${kind}` : ""}`);
+  $("#view").innerHTML = `
+    <div class="card stack">
+      <div class="row between"><div><h2>Factures et avoirs</h2>
+        <span class="small muted">Numérotation continue par année. Un document émis n'est jamais modifié.</span></div>
+        <select id="kind">${[["", "Tous"], ["invoice", "Factures"], ["credit_note", "Avoirs"]]
+          .map(([v, l]) => `<option value="${v}" ${v === kind ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="scroll"><table>
+        <tr><th>N°</th><th>Date</th><th>Client</th><th>MF</th><th class="num">HT</th><th class="num">TVA</th><th class="num">TTC</th><th></th></tr>
+        ${data.items.map((d) => `<tr>
+          <td class="nowrap">${d.number}${d.kind === "credit_note" ? ` <span class="badge refunded">Avoir</span>` : ""}</td>
+          <td class="small">${when(d.issued_at, false)}</td>
+          <td>${esc(d.customer?.name || "Client de passage")}</td><td class="small muted">${esc(d.customer?.tax_id || "")}</td>
+          <td class="num">${money(d.subtotal)}</td><td class="num">${money(d.tax_total)}</td><td class="num">${money(d.total)}</td>
+          <td class="num"><button class="btn small" data-pdf="/invoices/${d.id}/pdf">PDF</button></td></tr>`).join("")}
+      </table></div>
+      <p class="small muted">${data.total} document${data.total > 1 ? "s" : ""}</p>
+    </div>`;
+  $("#kind").onchange = (e) => viewInvoices(e.target.value);
+  document.querySelectorAll("[data-pdf]").forEach((b) => b.onclick = () => openFile(b.dataset.pdf));
+}
+
+// --- Rapports ----------------------------------------------------------------------
+
+async function viewReports(day, month) {
   const r = await api(`/reports/daily${day ? `?day=${day}` : ""}`);
-  const isAdmin = state.me.role === "admin";
+  month = month || r.date.slice(0, 7);
+  const vat = isAdmin() ? await api(`/reports/vat?month=${month}`) : null;
+  const yesterday = new Date(r.date); yesterday.setDate(yesterday.getDate() - 1);
   $("#view").innerHTML = `
     <div class="stack">
-      <div class="row between">
-        <input type="date" id="day" value="${r.date}">
-        ${isAdmin ? `<button class="btn" id="csv">Export last 30 days (CSV)</button>` : ""}
-      </div>
+      <div class="row between"><h2>Ventes du jour</h2><input type="date" id="day" value="${r.date}"></div>
+      ${r.orders_created === 0 && r.orders_paid === 0 ? `<div class="note">Aucune vente ce jour-là. <a href="#" id="prev">Voir la veille</a></div>` : ""}
       <div class="kpis">
-        <div class="card kpi"><div class="muted small">Revenue (TTC)</div><div class="v">${money(r.revenue)}</div></div>
-        <div class="card kpi"><div class="muted small">Paid orders</div><div class="v">${r.orders_paid}</div></div>
-        <div class="card kpi"><div class="muted small">Average basket</div><div class="v">${money(r.average_basket)}</div></div>
-        <div class="card kpi"><div class="muted small">VAT collected</div><div class="v">${money(r.tax_collected)}</div></div>
+        <div class="card kpi"><div class="muted small">Encaissé TTC</div><div class="v">${money(r.revenue)}</div></div>
+        <div class="card kpi"><div class="muted small">Commandes payées</div><div class="v">${r.orders_paid}</div></div>
+        <div class="card kpi"><div class="muted small">Panier moyen</div><div class="v">${money(r.average_basket)}</div></div>
+        <div class="card kpi"><div class="muted small">Avoirs émis</div><div class="v">${money(r.refunds)}</div></div>
       </div>
       <div class="grid2">
-        <div class="card stack"><h2>Top products</h2>
-          ${r.top_products.length ? `<table><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th></tr>
+        <div class="card stack"><h2>Meilleures ventes</h2>
+          ${r.top_products.length ? `<table><tr><th>Article</th><th class="num">Qté</th><th class="num">TTC</th></tr>
             ${r.top_products.map((p) => `<tr><td>${esc(p.name)}</td><td class="num">${p.quantity}</td><td class="num">${money(p.revenue)}</td></tr>`).join("")}
-          </table>` : `<p class="muted small">No sales this day.</p>`}
+          </table>` : `<p class="muted small">Aucune vente.</p>`}
         </div>
-        <div class="card stack"><h2>By payment method</h2>
-          <table>${r.payments_by_method.map((m) => `<tr><td>${m.method === "mock" ? "online (sandbox)" : m.method}</td><td class="num">${m.count}</td><td class="num">${money(m.amount)}</td></tr>`).join("") || `<tr><td class="muted small">Nothing yet.</td></tr>`}</table>
-          <p class="small muted">${r.orders_created} orders created, ${r.orders_cancelled} cancelled, ${r.items_sold} items sold.</p>
+        <div class="card stack"><h2>Par mode de paiement</h2>
+          <table>${r.payments_by_method.map((m) => `<tr><td>${METHOD[m.method] || m.method}</td><td class="num">${m.count}</td><td class="num">${money(m.amount)}</td></tr>`).join("") || `<tr><td class="muted small">Rien pour l'instant.</td></tr>`}</table>
+          <p class="small muted">${r.orders_created} commandes créées, ${r.orders_cancelled} annulées, ${r.items_sold} articles vendus.</p>
         </div>
       </div>
+      ${vat ? `
+      <div class="card stack">
+        <div class="row between"><div><h2>Déclaration de TVA</h2>
+          <span class="small muted">Factures moins avoirs émis dans le mois, par taux.</span></div>
+          <input type="month" id="month" value="${month}"></div>
+        <div class="scroll"><table>
+          <tr><th>Taux</th><th class="num">Base HT</th><th class="num">TVA</th><th class="num">TTC</th></tr>
+          ${vat.by_rate.map((l) => `<tr><td>${Number(l.rate)} %</td><td class="num">${money(l.base)}</td><td class="num">${money(l.vat)}</td><td class="num">${money(l.total)}</td></tr>`).join("")}
+          <tr><td class="muted">Timbres fiscaux</td><td></td><td></td><td class="num">${money(vat.fiscal_stamps)}</td></tr>
+          <tr><td><b>Total</b></td><td class="num"><b>${money(vat.base)}</b></td><td class="num"><b>${money(vat.vat)}</b></td><td class="num"><b>${money(vat.total)}</b></td></tr>
+        </table></div>
+        <p class="small muted">${vat.invoices} factures${vat.first_invoice ? ` (${vat.first_invoice} à ${vat.last_invoice})` : ""}, ${vat.credit_notes} avoir${vat.credit_notes > 1 ? "s" : ""}.</p>
+        <div class="row">
+          <button class="btn primary" id="journal">Journal des ventes du mois (Excel)</button>
+          <button class="btn" id="ordersCsv">Toutes les commandes du mois (Excel)</button>
+        </div>
+      </div>` : `<p class="small muted">La déclaration de TVA et les exports comptables sont réservés au compte gérant.</p>`}
     </div>`;
-  $("#day").onchange = (e) => viewReport(e.target.value);
-  const csv = $("#csv");
-  if (csv) csv.onclick = () => {
-    const end = new Date(r.date), start = new Date(end); start.setDate(end.getDate() - 29);
-    const iso = (d) => d.toISOString().slice(0, 10);
-    downloadFile(`/reports/orders.csv?start=${iso(start)}&end=${iso(end)}`, `orders_${iso(start)}_${iso(end)}.csv`);
-  };
+  $("#day").onchange = (e) => viewReports(e.target.value, month);
+  const prev = $("#prev");
+  if (prev) prev.onclick = (e) => { e.preventDefault(); viewReports(iso(yesterday), month); };
+  if (vat) {
+    $("#month").onchange = (e) => viewReports(r.date, e.target.value);
+    const [y, m] = month.split("-").map(Number);
+    const start = `${month}-01`, end = iso(new Date(Date.UTC(y, m, 0)));
+    $("#journal").onclick = () => downloadFile(`/reports/sales-journal.csv?start=${start}&end=${end}`, `journal_ventes_${month}.csv`);
+    $("#ordersCsv").onclick = () => downloadFile(`/reports/orders.csv?start=${start}&end=${end}`, `commandes_${month}.csv`);
+  }
 }
 
 // --- Stock -------------------------------------------------------------------------
 
-async function viewProducts() {
+async function viewStock() {
   const data = await api("/products?limit=200");
-  const isAdmin = state.me.role === "admin";
   $("#view").innerHTML = `
     <div class="card stack">
       <h2>Stock</h2>
       <div class="scroll"><table>
-        <tr><th>SKU</th><th>Product</th><th class="num">Price HT</th><th class="num">VAT</th><th class="num">Stock</th>${isAdmin ? "<th></th>" : ""}</tr>
+        <tr><th>Réf.</th><th>Article</th><th class="num">P.U. HT</th><th class="num">TVA</th><th class="num">Stock</th>${isAdmin() ? "<th></th>" : ""}</tr>
         ${data.items.map((p) => `<tr>
           <td class="small muted">${esc(p.sku)}</td><td>${esc(p.name)}</td>
           <td class="num">${money(p.unit_price)}</td><td class="num">${Number(p.tax_rate)} %</td>
           <td class="num">${p.stock <= 5 ? `<span class="badge pending">${p.stock}</span>` : p.stock}</td>
-          ${isAdmin ? `<td class="num"><button class="btn small" data-restock="${p.id}">+ Delivery</button></td>` : ""}</tr>`).join("")}
+          ${isAdmin() ? `<td class="num"><button class="btn small" data-restock="${p.id}">+ Réception</button></td>` : ""}</tr>`).join("")}
       </table></div>
-      ${isAdmin ? "" : `<p class="small muted">Log in as admin to receive deliveries.</p>`}
+      ${isAdmin() ? "" : `<p class="small muted">Connectez-vous en gérant pour enregistrer une réception.</p>`}
     </div>`;
   document.querySelectorAll("[data-restock]").forEach((b) => b.onclick = async () => {
-    const qty = Number(prompt("How many units arrived?", "24"));
+    const qty = Number(prompt("Combien d'unités reçues ?", "24"));
     if (!qty) return;
-    try { await api(`/products/${b.dataset.restock}/stock`, { method: "POST", json: { delta: qty, note: "Delivery" } }); viewProducts(); toast("Stock updated"); }
+    try { await api(`/products/${b.dataset.restock}/stock`, { method: "POST", json: { delta: qty, note: "Réception fournisseur" } }); viewStock(); toast("Stock mis à jour"); }
     catch (e) { toast(e.message); }
   });
 }

@@ -22,6 +22,7 @@ from app.models import (
     User,
 )
 from app.schemas import OrderCreate
+from app.services.documents import issue_credit_note, issue_invoice
 from app.services.payments.base import PaymentError, PaymentProvider
 
 MILLIME = Decimal("0.001")
@@ -93,7 +94,7 @@ def create_order(db: Session, data: OrderCreate, user: User) -> Order:
     order.total = subtotal + tax_total + order.stamp_duty
     db.add(order)
     db.flush()
-    order.number = f"FAC-{order.created_at.year}-{order.id:06d}"
+    order.number = f"BC-{order.created_at.year}-{order.id:06d}"
     for item in order.items:
         db.add(
             StockMovement(
@@ -108,14 +109,7 @@ def create_order(db: Session, data: OrderCreate, user: User) -> Order:
     return order
 
 
-def cancel_order(db: Session, order: Order, user: User) -> Order:
-    if order.status != OrderStatus.pending:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"Only pending orders can be cancelled (this one is {order.status})",
-        )
-    order.status = OrderStatus.cancelled
-    order.cancelled_at = utcnow()
+def _return_stock(db: Session, order: Order, user: User, reason: StockReason) -> None:
     for item in order.items:
         product = db.get(Product, item.product_id, with_for_update=True)
         product.stock += item.quantity
@@ -123,27 +117,90 @@ def cancel_order(db: Session, order: Order, user: User) -> Order:
             StockMovement(
                 product_id=product.id,
                 delta=item.quantity,
-                reason=StockReason.cancellation,
+                reason=reason,
                 order_id=order.id,
                 user_id=user.id,
             )
         )
+
+
+def _close_open_checkouts(order: Order) -> None:
     for payment in order.payments:
         if payment.status == PaymentStatus.pending:
             payment.status = PaymentStatus.failed
             payment.completed_at = utcnow()
+
+
+def cancel_order(db: Session, order: Order, user: User) -> Order:
+    """Drop an order that was never invoiced. Once invoiced, only a credit note can undo it."""
+    if order.status != OrderStatus.pending:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Only pending orders can be cancelled (this one is {order.status})",
+        )
+    if order.invoice:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Order is invoiced ({order.invoice.number}); cancel it with a credit note",
+        )
+    order.status = OrderStatus.cancelled
+    order.cancelled_at = utcnow()
+    _return_stock(db, order, user, StockReason.cancellation)
+    _close_open_checkouts(order)
     db.commit()
     return order
 
 
-def start_payment(db: Session, order: Order, method: str, provider: PaymentProvider) -> Payment:
-    """Record a cash payment, or open a checkout on the online gateway."""
+def invoice_order(db: Session, order: Order) -> Order:
+    """Invoice now, get paid later: for account customers paying by cheque or transfer."""
     if order.status != OrderStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Order is already {order.status}")
-    if method == "cash":
+    if order.invoice is None:
+        issue_invoice(db, order)
+        db.commit()
+    return order
+
+
+def credit_order(db: Session, order: Order, user: User, reason: str, restock: bool) -> Order:
+    """Cancel an invoiced order the legal way: the invoice stays, a credit note cancels it.
+
+    A paid order becomes `refunded` (the money goes back outside the API: cash, transfer, or
+    the gateway's dashboard). An unpaid one becomes `cancelled`.
+    """
+    if order.invoice is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Order has no invoice; cancel it instead of crediting it"
+        )
+    if order.credit_note is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Already credited by {order.credit_note.number}"
+        )
+    issue_credit_note(db, order, reason)
+    if order.status == OrderStatus.paid:
+        order.status = OrderStatus.refunded
+        order.refunded_at = utcnow()
+    else:
+        order.status = OrderStatus.cancelled
+        order.cancelled_at = utcnow()
+        _close_open_checkouts(order)
+    if restock:
+        _return_stock(db, order, user, StockReason.refund)
+    db.commit()
+    return order
+
+
+MANUAL_METHODS = {"cash": PaymentMethod.cash, "cheque": PaymentMethod.cheque,
+                  "transfer": PaymentMethod.transfer}  # fmt: skip
+
+
+def start_payment(db: Session, order: Order, method: str, provider: PaymentProvider) -> Payment:
+    """Record a payment taken at the counter, or open a checkout on the online gateway."""
+    if order.status != OrderStatus.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Order is already {order.status}")
+    if method in MANUAL_METHODS:
         payment = Payment(
             order=order,
-            method=PaymentMethod.cash,
+            method=MANUAL_METHODS[method],
             amount=order.total,
             currency=order.currency,
             status=PaymentStatus.pending,
@@ -195,6 +252,7 @@ def settle_payment(db: Session, payment: Payment, succeeded: bool, details: dict
         if order.status == OrderStatus.pending:
             order.status = OrderStatus.paid
             order.paid_at = payment.completed_at
+            issue_invoice(db, order, at=payment.completed_at)
             # Close the other open checkouts so the customer can't pay twice.
             for other in order.payments:
                 if other is not payment and other.status == PaymentStatus.pending:

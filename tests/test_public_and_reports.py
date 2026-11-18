@@ -18,17 +18,19 @@ def test_qr_landing_page_shows_status_without_login(client, cashier_headers, mak
     page = client.get(f"/o/{token}")
     assert page.status_code == 200
     assert order["number"] in page.text
-    assert "Awaiting payment" in page.text and "Pay online" in page.text
+    assert "En attente de paiement" in page.text and "Payer en ligne" in page.text
 
     client.post(f"/api/v1/orders/{order['id']}/payments", json={"method": "cash"},
                 headers=cashier_headers)  # fmt: skip
     page = client.get(f"/o/{token}")
-    assert "Paid" in page.text and "Pay online" not in page.text
+    assert "Payée" in page.text and "Payer en ligne" not in page.text
+    assert "Facture FAC-" in page.text
 
     r = client.get(f"/api/v1/public/orders/{token}")
     assert r.json()["status"] == "paid"
     assert "customer" not in r.json()  # nothing private on the public endpoint
-    assert client.get(f"/o/{token}/invoice.pdf").content.startswith(b"%PDF")
+    assert client.get(f"/o/{token}/document.pdf").content.startswith(b"%PDF")
+    assert r.json()["invoice_number"].startswith("FAC-")
 
 
 def test_unknown_token_is_404(client):
@@ -102,11 +104,11 @@ def test_csv_export(client, admin_headers, cashier_headers, make_order, customer
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/csv")
     assert r.text.startswith("﻿")
-    rows = list(csv.DictReader(io.StringIO(r.text.lstrip("﻿"))))
+    rows = list(csv.DictReader(io.StringIO(r.text.lstrip("﻿")), delimiter=";"))
     assert len(rows) == 1
     assert rows[0]["number"] == order["number"]
     assert rows[0]["customer"] == "Société Test"
-    assert rows[0]["total_ttc"] == "4.570"
+    assert rows[0]["total_ttc"] == "4,570"  # French Excel format by default
 
     bad = {"start": day, "end": "2000-01-01"}
     r = client.get("/api/v1/reports/orders.csv", params=bad, headers=admin_headers)

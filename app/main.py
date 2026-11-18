@@ -11,6 +11,7 @@ from app.api.routes import (
     auth,
     customers,
     internal,
+    invoices,
     orders,
     payments,
     products,
@@ -23,17 +24,19 @@ from app.core.config import settings
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
 DESCRIPTION = f"""
-Orders, stock, PDF invoices with a QR code, online payments and a daily sales report:
-the backend a shop, café or small business needs.
+Orders, invoices and credit notes with gap-free numbering, QR payments, the monthly TVA and a
+sales journal: the backend a Tunisian shop or distributor needs. The demo is an office-supplies
+distributor; it resets every day.
 
 ### Try it in 30 seconds
 1. Click **Authorize** and log in with one of the demo accounts:
-   - `admin@demo.tn` / `{settings.demo_password}` (everything)
-   - `cashier@demo.tn` / `{settings.demo_password}` (sales only)
-2. `GET /api/v1/products` to see the menu, then `POST /api/v1/orders`.
-3. Open the order's `invoice_url`, or its `public_url` (what the QR code points to).
-4. `POST /api/v1/orders/{{id}}/payments` with `{{"method": "online"}}` and open the `pay_url`.
-5. `GET /api/v1/reports/daily` for today's numbers.
+   - `admin@demo.tn` / `{settings.demo_password}` (manager: everything)
+   - `cashier@demo.tn` / `{settings.demo_password}` (counter: sales only)
+2. `GET /api/v1/products`, then `POST /api/v1/orders`: you get an order form (`BC-…`).
+3. `POST /api/v1/orders/{{id}}/payments` with `{{"method": "cash"}}`: the invoice (`FAC-…`) is issued.
+   Or `{{"method": "online"}}` and open the `pay_url`.
+4. Open the order's `document_url` (the PDF) or its `public_url` (what the QR code points to).
+5. `GET /api/v1/reports/vat` for the month's TVA by rate.
 
 Money is returned as strings with 3 decimals (millimes), so no amount is ever rounded by a float.
 Online payments currently go through: **{settings.payment_provider}**.
@@ -53,7 +56,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-for module in (auth, users, customers, products, orders, payments, reports):
+for module in (auth, users, customers, products, orders, invoices, payments, reports):
     app.include_router(module.router, prefix="/api/v1")
 app.include_router(public.router)
 app.include_router(internal.router)

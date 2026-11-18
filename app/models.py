@@ -30,11 +30,15 @@ class OrderStatus(StrEnum):
     pending = "pending"
     paid = "paid"
     cancelled = "cancelled"
+    refunded = "refunded"
 
 
 class PaymentMethod(StrEnum):
     cash = "cash"
+    cheque = "cheque"
+    transfer = "transfer"
     mock = "mock"
+    flouci = "flouci"
     konnect = "konnect"
     stripe = "stripe"
 
@@ -49,7 +53,13 @@ class StockReason(StrEnum):
     initial = "initial"
     sale = "sale"
     cancellation = "cancellation"
+    refund = "refund"
     adjustment = "adjustment"
+
+
+class InvoiceKind(StrEnum):
+    invoice = "invoice"
+    credit_note = "credit_note"
 
 
 class User(Base):
@@ -110,7 +120,8 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # Assigned right after insert, from the id: FAC-2026-000042.
+    # Order form ("bon de commande") number, assigned right after insert: BC-2026-000042.
+    # The invoice gets its own gap-free number when the order is paid (see Invoice).
     number: Mapped[str | None] = mapped_column(String(32), unique=True)
     # Unguessable token behind the QR code, so order ids are never exposed publicly.
     public_token: Mapped[str] = mapped_column(
@@ -130,6 +141,7 @@ class Order(Base):
     created_at: Mapped[datetime] = _timestamp(default=utcnow, index=True)
     paid_at: Mapped[datetime | None] = _timestamp(index=True)
     cancelled_at: Mapped[datetime | None] = _timestamp()
+    refunded_at: Mapped[datetime | None] = _timestamp()
 
     customer: Mapped[Customer | None] = relationship()
     created_by: Mapped[User] = relationship()
@@ -137,6 +149,18 @@ class Order(Base):
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
     )
     payments: Mapped[list["Payment"]] = relationship(back_populates="order", order_by="Payment.id")
+    invoices: Mapped[list["Invoice"]] = relationship(back_populates="order", order_by="Invoice.id")
+
+    def _document(self, kind: "InvoiceKind") -> "Invoice | None":
+        return next((i for i in self.invoices if i.kind == kind), None)
+
+    @property
+    def invoice(self) -> "Invoice | None":
+        return self._document(InvoiceKind.invoice)
+
+    @property
+    def credit_note(self) -> "Invoice | None":
+        return self._document(InvoiceKind.credit_note)
 
 
 class OrderItem(Base):
@@ -177,3 +201,41 @@ class Payment(Base):
     completed_at: Mapped[datetime | None] = _timestamp()
 
     order: Mapped[Order] = relationship(back_populates="payments")
+
+
+class Invoice(Base):
+    """An invoice ("facture") or a credit note ("avoir"). Never edited or deleted once issued.
+
+    Amounts are stored positive for both kinds; a credit note cancels the invoice it points to.
+    """
+
+    __tablename__ = "invoices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # FAC-2026-00001 / AV-2026-00001: one gap-free sequence per kind and year.
+    number: Mapped[str] = mapped_column(String(32), unique=True)
+    kind: Mapped[InvoiceKind] = mapped_column(_enum(InvoiceKind), index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    credited_invoice_id: Mapped[int | None] = mapped_column(ForeignKey("invoices.id"))
+    issued_at: Mapped[datetime] = _timestamp(default=utcnow, index=True)
+    # The customer as they were when the document was issued.
+    customer: Mapped[dict | None] = mapped_column(JSON)
+    subtotal: Mapped[Decimal] = mapped_column(Money)
+    tax_total: Mapped[Decimal] = mapped_column(Money)
+    stamp_duty: Mapped[Decimal] = mapped_column(Money)
+    total: Mapped[Decimal] = mapped_column(Money)
+    currency: Mapped[str] = mapped_column(String(3))
+    reason: Mapped[str | None] = mapped_column(String(255))
+
+    order: Mapped[Order] = relationship(back_populates="invoices")
+    credited_invoice: Mapped["Invoice | None"] = relationship(remote_side=[id])
+
+
+class DocumentSequence(Base):
+    """Last number used per prefix and year, so invoice numbers have no gaps."""
+
+    __tablename__ = "document_sequences"
+
+    prefix: Mapped[str] = mapped_column(String(8), primary_key=True)
+    year: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    last_value: Mapped[int] = mapped_column(default=0)

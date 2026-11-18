@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     # What gets printed on invoices.
-    business_name: str = "Café El Medina"
-    business_address: str = "12 Rue de Marseille, 1000 Tunis"
+    business_name: str = "Bureau Plus"
+    business_address: str = "45 Avenue de la Liberté, 1002 Tunis"
     business_phone: str = "+216 71 000 000"
     business_tax_id: str = "1234567/A/M/000"
     currency: str = "TND"
@@ -34,9 +34,15 @@ class Settings(BaseSettings):
     default_tax_rate: Decimal = Decimal("19")
     # Tunisian "timbre fiscal" added to every invoice. Set to 0 to disable.
     fiscal_stamp: Decimal = Decimal("1.000")
+    # Whether a credit note ("avoir") also gives back the stamp. Ask your accountant.
+    credit_note_includes_stamp: bool = False
 
     # Which gateway handles online payments.
-    payment_provider: Literal["mock", "konnect", "stripe"] = "mock"
+    payment_provider: Literal["mock", "flouci", "konnect", "stripe"] = "mock"
+    # Flouci: keys of the developer app (its TEST APP for sandbox payments with test cards).
+    flouci_public_key: str = ""
+    flouci_private_key: str = ""
+    flouci_base_url: str = "https://developers.flouci.com/api/v2"
     konnect_api_key: str = ""
     konnect_wallet_id: str = ""
     konnect_base_url: str = "https://api.sandbox.konnect.network/api/v2"

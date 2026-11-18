@@ -8,7 +8,8 @@ def test_order_totals_tax_and_fiscal_stamp(make_order, products):
             {"product_id": products[1].id, "quantity": 1},  # 1.400 HT, 7 %
         ]
     )
-    assert order["number"].startswith("FAC-")
+    assert order["number"].startswith("BC-")  # an order form, not an invoice
+    assert order["invoice"] is None
     assert order["status"] == "pending"
     assert order["subtotal"] == "4.400"
     assert order["tax_total"] == "0.668"  # 0.570 + 0.098
@@ -78,9 +79,9 @@ def test_list_filters(client, cashier_headers, make_order):
     assert r.json()["total"] == 2 and len(r.json()["items"]) == 1
 
 
-def test_invoice_pdf_and_qr(client, cashier_headers, make_order, customer):
+def test_order_form_pdf_and_qr(client, cashier_headers, make_order, customer):
     order = make_order(customer_id=customer.id, note="Livraison 2e étage")
-    r = client.get(f"/api/v1/orders/{order['id']}/invoice.pdf", headers=cashier_headers)
+    r = client.get(f"/api/v1/orders/{order['id']}/document.pdf", headers=cashier_headers)
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content.startswith(b"%PDF")
@@ -90,6 +91,6 @@ def test_invoice_pdf_and_qr(client, cashier_headers, make_order, customer):
     assert r.content.startswith(b"\x89PNG")
 
 
-def test_invoice_requires_login(client, make_order):
+def test_documents_require_login(client, make_order):
     order = make_order()
-    assert client.get(f"/api/v1/orders/{order['id']}/invoice.pdf").status_code == 401
+    assert client.get(f"/api/v1/orders/{order['id']}/document.pdf").status_code == 401

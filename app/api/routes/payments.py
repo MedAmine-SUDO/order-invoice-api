@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Annotated
 
@@ -10,6 +11,8 @@ from app.models import Payment, PaymentMethod
 from app.schemas import PaymentOut
 from app.services.orders import settle_payment
 from app.services.payments import PaymentError, PaymentProvider, get_payment_provider
+from app.services.payments.base import verify_signature
+from app.services.payments.flouci import FlouciProvider
 from app.services.payments.konnect import KonnectProvider
 from app.services.payments.stripe import verify_webhook
 
@@ -30,6 +33,40 @@ def read_payment(db: DbSession, _: CurrentUser, payment_id: int):
     if payment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payment not found")
     return payment
+
+
+@router.post("/webhooks/flouci", include_in_schema=False)
+async def flouci_webhook(
+    request: Request,
+    db: DbSession,
+    provider: Annotated[PaymentProvider, Depends(get_payment_provider)],
+    x_flouci_signature: Annotated[str, Header()] = "",
+):
+    """Flouci's signed webhook (version 2). Signature first, then Flouci confirms the status."""
+    payload = await request.body()
+    try:
+        verify_signature(payload, x_flouci_signature, settings.flouci_private_key)
+    except PaymentError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    event = json.loads(payload)
+    payment = db.scalar(
+        select(Payment).where(
+            Payment.provider_ref == str(event.get("payment_id")),
+            Payment.method == PaymentMethod.flouci,
+        )
+    )
+    if payment is None:
+        return {"received": True}  # not ours: acknowledge so Flouci stops retrying
+    if not isinstance(provider, FlouciProvider):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Flouci is not the active provider")
+    try:
+        outcome, details = provider.check(payment.provider_ref)
+    except PaymentError as exc:
+        # A non-2xx answer makes Flouci retry later, which is what we want here.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not verify payment") from exc
+    if outcome is not None:
+        settle_payment(db, payment, outcome, {**details, "flouci_event": event.get("event_id")})
+    return {"received": True}
 
 
 @router.get("/webhooks/konnect", include_in_schema=False)
