@@ -72,6 +72,7 @@
   .scroll { overflow-x: auto }
   h2 { font-size: 17px; margin: 0 } h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600 }
   .note { background: var(--soft); border-radius: 10px; padding: 10px 12px; font-size: 13px }
+  .note.warn { background: var(--amber-bg); color: var(--amber) }
   .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1 }
 </style>
 </head>
@@ -91,13 +92,34 @@ const iso = (d) => d.toISOString().slice(0, 10);
 const isAdmin = () => state.me?.role === "admin";
 
 const STATUS = { pending: "En attente", paid: "Payée", cancelled: "Annulée", refunded: "Remboursée" };
-const METHOD = { cash: "Espèces", cheque: "Chèque", transfer: "Virement", mock: "En ligne (test)", flouci: "Flouci", konnect: "Konnect", stripe: "Carte (Stripe)" };
+const METHOD = { cash: "Espèces", cheque: "Chèque", transfer: "Virement", mock: "Paiement en ligne test", flouci: "Flouci", konnect: "Konnect", stripe: "Carte (Stripe)" };
+const toRefund = (o) => o.payments.find((p) => p.needs_refund);
 function badge(o) {
+  if (toRefund(o)) return `<span class="badge refunded">À rembourser</span>`;
   if (o.status === "pending" && o.invoice) return `<span class="badge pending">Facturée · impayée</span>`;
   return `<span class="badge ${o.status}">${STATUS[o.status]}</span>`;
 }
 
 try { state.token = sessionStorage.getItem("token"); } catch {}
+
+// The API answers in English (it's for developers); the people at the counter read French.
+const ERRORS = [
+  [/Not enough stock for '(.+)': (\d+) left, (\d+) asked/, (m) => `Stock insuffisant pour « ${m[1]} » : ${m[2]} disponible(s), ${m[3]} demandé(s)`],
+  [/is not for sale/, () => "Cet article n'est plus en vente"],
+  [/Order is already (\w+)/, (m) => `Cette commande est déjà ${(STATUS[m[1]] || m[1]).toLowerCase()}`],
+  [/Order is invoiced/, () => "Cette commande est déjà facturée : annulez-la par un avoir"],
+  [/Only pending orders can be cancelled/, () => "Seule une commande en attente peut être annulée"],
+  [/Already credited by (.+)/, (m) => `Déjà annulée par l'avoir ${m[1]}`],
+  [/Admin role required/, () => "Réservé au compte gérant"],
+  [/SKU '(.+)' already exists/, (m) => `La référence « ${m[1]} » existe déjà`],
+  [/Customer has orders/, () => "Ce client a des commandes : il ne peut pas être supprimé"],
+  [/Wrong email or password/, () => "E-mail ou mot de passe incorrect"],
+  [/Konnect|Flouci|Stripe|verify payment|Payment provider/i, () => "Le service de paiement ne répond pas. Réessayez dans un instant."],
+];
+function translate(detail) {
+  for (const [re, fr] of ERRORS) { const m = detail.match(re); if (m) return fr(m); }
+  return detail;
+}
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
@@ -112,7 +134,7 @@ async function api(path, opts = {}) {
   if (res.status === 401 && state.token) { logout(); throw new Error("Session expirée, reconnectez-vous"); }
   if (!res.ok) {
     let detail = res.statusText;
-    try { const body = await res.json(); detail = typeof body.detail === "string" ? body.detail : "Données invalides"; } catch {}
+    try { const body = await res.json(); detail = typeof body.detail === "string" ? translate(body.detail) : "Vérifiez les champs saisis"; } catch {}
     throw new Error(detail);
   }
   return opts.raw ? res : res.json();
@@ -164,12 +186,13 @@ function renderLogin() {
       state.token = res.access_token;
       try { sessionStorage.setItem("token", res.access_token); } catch {}
       start();
-    } catch (err) { toast(err.message === "Wrong email or password" ? "E-mail ou mot de passe incorrect" : err.message); }
+    } catch (err) { toast(err.message); }
   };
 }
 
 function logout() {
-  state.token = null; state.me = null;
+  // The next person at the till starts clean: no leftover cart, order or tab.
+  Object.assign(state, { token: null, me: null, tab: "sale", cart: {}, order: null, search: "", customerId: null });
   try { sessionStorage.removeItem("token"); } catch {}
   renderLogin();
 }
@@ -235,9 +258,11 @@ function drawSale() {
               <td class="num"><input class="qty" type="number" min="0" max="${l.p.stock}" value="${l.q}" data-qty="${l.p.id}"></td>
               <td class="num"><button class="x" data-del="${l.p.id}" title="Retirer">×</button></td></tr>`).join("")}
             </table>` : `<p class="muted small">Cliquez sur un article pour l'ajouter.</p>`}
+          <div class="row between"><h3>Client</h3><a href="#" id="newCustomer" class="small">+ Nouveau client</a></div>
+          <div id="customerForm"></div>
           <select id="customer" style="width:100%">
             <option value="">Client de passage</option>
-            ${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}${c.tax_id ? " · MF " + esc(c.tax_id) : ""}</option>`).join("")}
+            ${state.customers.map((c) => `<option value="${c.id}" ${c.id == state.customerId ? "selected" : ""}>${esc(c.name)}${c.tax_id ? " · MF " + esc(c.tax_id) : ""}</option>`).join("")}
           </select>
           <div class="row between small"><span class="muted">Total HT</span><span class="price">${lines.length ? money(ht) : "–"}</span></div>
           <div class="row between"><span class="muted small">TTC estimé (+ timbre 1 DT)</span><b class="price">${lines.length ? money(ttc + 1) : "–"}</b></div>
@@ -250,20 +275,45 @@ function drawSale() {
   search.oninput = () => { state.search = search.value; drawSale(); const s = $("#search"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); };
   document.querySelectorAll("[data-add]").forEach((b) => b.onclick = () => { state.cart[b.dataset.add] = (state.cart[b.dataset.add] || 0) + 1; drawSale(); });
   document.querySelectorAll("[data-qty]").forEach((i) => i.onchange = () => {
-    const n = Math.max(0, Math.floor(Number(i.value) || 0));
+    const product = state.products.find((p) => p.id == i.dataset.qty);
+    let n = Math.max(0, Math.floor(Number(i.value) || 0));
+    if (n > product.stock) { n = product.stock; toast(`Seulement ${product.stock} en stock pour « ${product.name} »`); }
     if (n) state.cart[i.dataset.qty] = n; else delete state.cart[i.dataset.qty];
     drawSale();
   });
   document.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => { delete state.cart[b.dataset.del]; drawSale(); });
+  $("#customer").onchange = (e) => (state.customerId = e.target.value);
+  $("#newCustomer").onclick = (e) => {
+    e.preventDefault();
+    $("#customerForm").innerHTML = `
+      <form class="note stack" id="cform">
+        <input name="name" placeholder="Raison sociale ou nom *" required style="width:100%">
+        <input name="tax_id" placeholder="Matricule fiscal (ex. 1234567/A/M/000)" style="width:100%">
+        <input name="address" placeholder="Adresse" style="width:100%">
+        <div class="row"><input name="phone" placeholder="Téléphone" style="flex:1"><input name="email" type="email" placeholder="E-mail" style="flex:1"></div>
+        <div class="row"><button class="btn primary">Ajouter le client</button><button type="button" class="btn" id="ccancel">Annuler</button></div>
+      </form>`;
+    $("#ccancel").onclick = () => ($("#customerForm").innerHTML = "");
+    $("#cform").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = Object.fromEntries([...new FormData(ev.target)].filter(([, v]) => v.trim()));
+      try {
+        const c = await api("/customers", { method: "POST", json: body });
+        state.customers.push(c); state.customerId = c.id; toast(`Client « ${c.name} » ajouté`); drawSale();
+      } catch (err) { toast(err.message); }
+    };
+  };
   $("#checkout").onclick = async () => {
+    $("#checkout").disabled = true;
     try {
       const customer_id = $("#customer").value ? Number($("#customer").value) : null;
+      state.customerId = null;
       const items = Object.entries(state.cart).map(([product_id, quantity]) => ({ product_id: Number(product_id), quantity }));
       state.order = await api("/orders", { method: "POST", json: { customer_id, items } });
       state.cart = {};
       toast(`Commande ${state.order.number} créée`);
       await viewSale();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message); $("#checkout").disabled = false; }
   };
   if (state.order) drawOrderPanel($("#orderPanel"));
 }
@@ -273,7 +323,8 @@ function drawSale() {
 function drawOrderPanel(el, onChange) {
   const o = state.order;
   const pending = o.status === "pending";
-  const paid = o.payments.find((p) => p.status === "succeeded");
+  const late = toRefund(o);
+  const paid = o.payments.find((p) => p.status === "succeeded" && !p.needs_refund);
   el.innerHTML = `
     <div class="card stack">
       <div class="row between"><div><h2>${o.invoice ? o.invoice.number : o.number}</h2>
@@ -287,6 +338,7 @@ function drawOrderPanel(el, onChange) {
         <tr><td><b>Total TTC</b></td><td class="num"><b>${money(o.total)}</b></td></tr>
       </table>
       ${paid ? `<p class="small muted">Réglée par ${METHOD[paid.method]} le ${when(paid.completed_at)}</p>` : ""}
+      ${late ? `<div class="note warn"><b>À rembourser : ${money(late.amount)}</b><br>Le client a payé le ${when(late.completed_at)} (${METHOD[late.method]}), alors que la commande était déjà ${o.status === "paid" ? "réglée" : "annulée"}. Remboursez-le depuis l'espace marchand de la passerelle.</div>` : ""}
       ${o.credit_note ? `<p class="small muted">Avoir ${o.credit_note.number} du ${when(o.credit_note.issued_at, false)}</p>` : ""}
       ${pending ? `
         <h3>Encaisser</h3>
@@ -311,7 +363,11 @@ function drawOrderPanel(el, onChange) {
       ${o.invoice && !o.credit_note && !isAdmin() ? `<p class="small muted">Une facture ne s'annule que par un avoir (compte gérant).</p>` : ""}
     </div>`;
   const reload = async () => { state.order = await api(`/orders/${o.id}`); drawOrderPanel(el, onChange); onChange?.(); };
-  const act = (fn, msg) => async () => { try { await fn(); await reload(); if (msg) toast(msg); } catch (e) { toast(e.message); } };
+  const act = (fn, msg) => async () => {
+    el.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try { await fn(); await reload(); if (msg) toast(msg); }
+    catch (e) { toast(e.message); el.querySelectorAll("button").forEach((b) => (b.disabled = false)); }
+  };
   el.querySelectorAll("[data-pay]").forEach((b) => b.onclick = act(async () => {
     const p = await api(`/orders/${o.id}/payments`, { method: "POST", json: { method: b.dataset.pay } });
     if (p.pay_url) { window.open(p.pay_url, "_blank"); toast("Paiement ouvert dans un nouvel onglet. Revenez ici ensuite."); }
@@ -342,11 +398,12 @@ function drawOrderPanel(el, onChange) {
 
 // --- Commandes ---------------------------------------------------------------------
 
-const FILTERS = [["", "Toutes"], ["unpaid", "Factures impayées"], ["pending", "En attente"], ["paid", "Payées"], ["cancelled", "Annulées"], ["refunded", "Remboursées"]];
+const FILTERS = [["", "Toutes"], ["unpaid", "Factures impayées"], ["refund", "À rembourser"], ["pending", "En attente"], ["paid", "Payées"], ["cancelled", "Annulées"], ["refunded", "Remboursées"]];
 
 async function viewOrders(filter = "") {
-  const qs = filter === "unpaid" ? "&status=pending&invoiced=true" : filter ? `&status=${filter}` : "";
+  const qs = filter === "unpaid" ? "&status=pending&invoiced=true" : filter && filter !== "refund" ? `&status=${filter}` : "";
   const data = await api(`/orders?limit=200${qs}`);
+  if (filter === "refund") { data.items = data.items.filter(toRefund); data.total = data.items.length; }
   const due = data.items.reduce((s, o) => s + Number(o.total), 0);
   $("#view").innerHTML = `
     <div class="grid2">
@@ -461,7 +518,8 @@ async function viewStock() {
   const data = await api("/products?limit=200");
   $("#view").innerHTML = `
     <div class="card stack">
-      <h2>Stock</h2>
+      <div class="row between"><h2>Stock</h2>${isAdmin() ? `<button class="btn" id="newProduct">+ Nouvel article</button>` : ""}</div>
+      <div id="productForm"></div>
       <div class="scroll"><table>
         <tr><th>Réf.</th><th>Article</th><th class="num">P.U. HT</th><th class="num">TVA</th><th class="num">Stock</th>${isAdmin() ? "<th></th>" : ""}</tr>
         ${data.items.map((p) => `<tr>
@@ -472,6 +530,30 @@ async function viewStock() {
       </table></div>
       ${isAdmin() ? "" : `<p class="small muted">Connectez-vous en gérant pour enregistrer une réception.</p>`}
     </div>`;
+  const np = $("#newProduct");
+  if (np) np.onclick = () => {
+    $("#productForm").innerHTML = `
+      <form class="note stack" id="pform">
+        <div class="row"><input name="sku" placeholder="Référence *" required style="width:160px"><input name="name" placeholder="Désignation *" required style="flex:1"></div>
+        <div class="row">
+          <input name="unit_price" placeholder="Prix HT (ex. 12,500) *" required inputmode="decimal" style="width:190px">
+          <select name="tax_rate"><option value="19">TVA 19 %</option><option value="13">TVA 13 %</option><option value="7">TVA 7 %</option><option value="0">Exonéré</option></select>
+          <input name="stock" type="number" min="0" placeholder="Stock initial" style="width:130px">
+        </div>
+        <div class="row"><button class="btn primary">Créer l'article</button><button type="button" class="btn" id="pcancel">Annuler</button></div>
+      </form>`;
+    $("#pcancel").onclick = () => ($("#productForm").innerHTML = "");
+    $("#pform").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const f = Object.fromEntries(new FormData(ev.target));
+      const price = f.unit_price.replace(/\s/g, "").replace(",", ".");
+      if (!/^\d+(\.\d{1,3})?$/.test(price)) return toast("Prix invalide : au plus 3 décimales (millimes)");
+      try {
+        await api("/products", { method: "POST", json: { sku: f.sku.trim(), name: f.name.trim(), unit_price: price, tax_rate: f.tax_rate, stock: Number(f.stock) || 0 } });
+        toast("Article créé"); viewStock();
+      } catch (err) { toast(err.message); }
+    };
+  };
   document.querySelectorAll("[data-restock]").forEach((b) => b.onclick = async () => {
     const qty = Number(prompt("Combien d'unités reçues ?", "24"));
     if (!qty) return;

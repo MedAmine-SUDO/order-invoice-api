@@ -238,6 +238,11 @@ def test_late_gateway_success_on_paid_order_is_flagged_for_refund(
     payment = db.get(Payment, online["id"])
     assert payment.status == "succeeded"
     assert payment.details["needs_refund"] is True
+    # Staff see it in the API, and the customer is told on the QR page.
+    seen = client.get(f"/api/v1/payments/{online['id']}", headers=cashier_headers).json()
+    assert seen["needs_refund"] is True
+    token = httpx.URL(order["public_url"]).path.rsplit("/", 1)[-1]
+    assert "va vous le rembourser" in client.get(f"/o/{token}").text
 
 
 # --- Flouci ---------------------------------------------------------------------------

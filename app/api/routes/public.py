@@ -54,6 +54,8 @@ PAGE = """<!doctype html>
   .primary {{ background:#111827; color:#fff }} .ghost {{ background:transparent;
          color:var(--ink); border:1px solid var(--line) }}
   @media (prefers-color-scheme: dark) {{ .primary {{ background:#f3f4f6; color:#111827 }} }}
+  .notice {{ background:#fef3c7; color:#78350f; border-radius:10px; padding:10px 12px;
+             font-size:14px }}
   .row {{ display:flex; justify-content:space-between; align-items:center; gap:12px }}
 </style></head><body><main>{body}</main></body></html>"""
 
@@ -110,6 +112,14 @@ def order_page(
         links += (
             f'<a class="btn ghost" href="/o/{token}/credit-note.pdf">'
             f"Télécharger l'avoir {order.credit_note.number} (PDF)</a>"
+        )
+    late = next((p for p in order.payments if (p.details or {}).get("needs_refund")), None)
+    if late:
+        pay += (
+            '<p class="notice">Votre paiement de '
+            f"{_money(late.amount)} a bien été reçu, mais cette commande avait déjà été "
+            f"{'réglée' if order.status == OrderStatus.paid else 'annulée'}. "
+            f"{escape(settings.business_name)} va vous le rembourser.</p>"
         )
     body = f"""
     <div class="card">

@@ -161,6 +161,13 @@ class PaymentOut(ORM):
     pay_url: str | None
     created_at: datetime
     completed_at: datetime | None
+    details: dict | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def needs_refund(self) -> bool:
+        """Paid after the order was already settled or cancelled: give the money back."""
+        return bool((self.details or {}).get("needs_refund"))
 
 
 class PaymentCreate(BaseModel):
